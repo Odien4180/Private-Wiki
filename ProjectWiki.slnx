@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProjectWiki.Cli/ProjectWiki.Cli.csproj" />
+    <Project Path="src/ProjectWiki.Core/ProjectWiki.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProjectWiki.Core.Tests/ProjectWiki.Core.Tests.csproj" />
+    <Project Path="tests/ProjectWiki.Integration.Tests/ProjectWiki.Integration.Tests.csproj" />
+  </Folder>
+</Solution>
