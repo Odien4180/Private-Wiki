@@ -1,4 +1,5 @@
 using ProjectWiki.Core.Persistence;
+using ProjectWiki.Core.Scanning;
 
 namespace ProjectWiki.Core.Navigation;
 
@@ -237,7 +238,7 @@ public sealed class NavigationService
         }
 
         var firstPartyEntities = data.Entities.Entities
-            .Where(entity => ClassifyEntity(entity) == "first_party" && entity.Sources.Count > 0)
+            .Where(entity => CodeOwnershipClassifier.Classify(entity) == "first_party" && entity.Sources.Count > 0)
             .ToList();
         if (firstPartyEntities.Count > 0 && minCoverage > 0)
         {
@@ -276,7 +277,7 @@ public sealed class NavigationService
         }
 
         var thirdPartyMentions = data.Entities.Entities
-            .Where(entity => ClassifyEntity(entity) == "third_party")
+            .Where(entity => CodeOwnershipClassifier.Classify(entity) == "third_party")
             .Count(entity => IsEntityDocumented(entity, docs));
         var firstPartyMentions = firstPartyEntities.Count(entity => IsEntityDocumented(entity, docs));
         if (thirdPartyMentions > 0 && firstPartyMentions > 0 && thirdPartyMentions > firstPartyMentions)
@@ -564,27 +565,6 @@ public sealed class NavigationService
             doc.Content.Contains($"[[{entity.Id}", StringComparison.OrdinalIgnoreCase)
             || doc.Content.Contains(entity.Title, StringComparison.OrdinalIgnoreCase)
             || entity.Sources.Any(source => doc.Content.Contains(source, StringComparison.OrdinalIgnoreCase)));
-
-    private static string ClassifyEntity(ProjectWiki.Core.Model.Entity entity)
-    {
-        if (entity.Type is ProjectWiki.Core.Model.EntityType.Package or ProjectWiki.Core.Model.EntityType.External)
-        {
-            return "third_party";
-        }
-
-        if (entity.Sources.Any(source =>
-                source.StartsWith("Assets/AmplifyShaderEditor/", StringComparison.OrdinalIgnoreCase)
-                || source.StartsWith("Assets/AmplifyShaderPack/", StringComparison.OrdinalIgnoreCase)
-                || source.StartsWith("Assets/NiloToonURP/", StringComparison.OrdinalIgnoreCase)
-                || source.StartsWith("Assets/Packages/", StringComparison.OrdinalIgnoreCase)
-                || source.StartsWith("Assets/TextMesh Pro/", StringComparison.OrdinalIgnoreCase)
-                || source.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase)))
-        {
-            return "third_party";
-        }
-
-        return "first_party";
-    }
 
     private static void AddIssue(List<NavigationValidationIssue> issues, string code, string message, WikiLink? link = null) =>
         issues.Add(new NavigationValidationIssue

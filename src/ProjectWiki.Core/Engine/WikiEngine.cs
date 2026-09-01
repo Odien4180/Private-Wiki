@@ -621,7 +621,7 @@ public sealed class WikiEngine
             .GroupBy(id => id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         var firstPartyEntities = analysis.Entities
-            .Where(entity => ClassifyEntity(entity) == "first_party")
+            .Where(entity => CodeOwnershipClassifier.Classify(entity) == "first_party")
             .ToList();
 
         var plan = new KnowledgeDocumentPlan
@@ -751,23 +751,8 @@ public sealed class WikiEngine
         Assembly = entity.Members.FirstOrDefault(member => member.StartsWith("assembly:", StringComparison.OrdinalIgnoreCase))?.Split(':', 2)[1].Trim(),
         Sources = entity.Sources,
         Members = entity.Members,
-        CodeOwnership = ClassifyEntity(entity),
+        CodeOwnership = CodeOwnershipClassifier.Classify(entity),
     };
-
-    private static string ClassifyEntity(Entity entity)
-    {
-        if (entity.Type is EntityType.Package or EntityType.External)
-        {
-            return "third_party";
-        }
-
-        if (entity.Sources.Any(source => UnityExclusionProfile.AutomaticExclusions.Any(pattern => GlobMatcher.IsMatch(source, pattern))))
-        {
-            return "third_party";
-        }
-
-        return "first_party";
-    }
 
     private static HashSet<string> ExpandRelatedIds(string entityId, IReadOnlyList<Relation> relations, int depth)
     {

@@ -190,3 +190,22 @@ public sealed class ProjectScopeAnalyzer
             : "excluded";
     }
 }
+
+public static class CodeOwnershipClassifier
+{
+    public static string Classify(ProjectWiki.Core.Model.Entity entity)
+    {
+        if (entity.Type is ProjectWiki.Core.Model.EntityType.Package or ProjectWiki.Core.Model.EntityType.External)
+        {
+            return "third_party";
+        }
+
+        if (entity.Sources.Any(source => UnityExclusionProfile.AutomaticExclusions.Any(pattern => GlobMatcher.IsMatch(source, pattern))
+                || source.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "third_party";
+        }
+
+        return "first_party";
+    }
+}
