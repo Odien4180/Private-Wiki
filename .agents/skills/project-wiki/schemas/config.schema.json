@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://project-wiki/schemas/config.schema.json",
+  "title": "WikiConfig",
+  "type": "object",
+  "required": ["version", "project", "wiki"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "project": {
+      "type": "object",
+      "required": ["root", "type"],
+      "properties": {
+        "root": { "type": "string" },
+        "type": { "type": "string", "enum": ["generic", "dotnet", "unity"] }
+      },
+      "additionalProperties": false
+    },
+    "wiki": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" },
+        "language": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "analysis": {
+      "type": "object",
+      "properties": {
+        "git": { "type": "boolean" },
+        "hashFallback": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "exclude": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

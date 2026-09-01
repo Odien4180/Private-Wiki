@@ -1,0 +1,7 @@
+## .NET build artifacts
+bin/
+obj/
+*.user
+
+## Local wiki output produced by manual CLI testing
+/tmp/

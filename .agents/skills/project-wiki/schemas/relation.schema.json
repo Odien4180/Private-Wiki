@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://project-wiki/schemas/relation.schema.json",
+  "title": "Relation",
+  "type": "object",
+  "required": ["source", "target", "type", "confidence"],
+  "properties": {
+    "source": { "type": "string" },
+    "target": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "contains", "belongs_to", "uses", "depends_on", "references",
+        "inherits", "implements", "creates", "loads", "configures",
+        "initialized_by", "used_in_scene", "uses_prefab", "related_to"
+      ]
+    },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string" },
+          "startLine": { "type": "integer" },
+          "endLine": { "type": "integer" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
