@@ -60,6 +60,27 @@ read docs/validation.md
 Never infer deterministic source facts that can be obtained
 from the supplied analysis tools.
 
+For authoring tasks, do not stop after `init` or `update`. The normal flow is:
+
+```text
+init or update
+→ review analysis scope
+→ review knowledge/document-plan.json
+→ classify systems and features
+→ query related sources/entities
+→ write Markdown AGENT blocks
+→ insert wiki links
+→ write source captions from evidence
+→ validate
+→ build
+```
+
+Write authored documentation under `documents/project/`,
+`documents/architecture/`, `documents/systems/`, `documents/features/`,
+`documents/classes/`, `documents/scenes/`, `documents/data/`, and
+`documents/packages/` as appropriate. Preserve content outside `AUTO` and
+`AGENT` blocks.
+
 ## CLI
 
 This skill orchestrates the `project-wiki` CLI (see `scripts/`). The CLI
@@ -69,6 +90,10 @@ classification, prose generation, cross-link context resolution, captions).
 
 ```bash
 project-wiki init --project <path> --wiki <path>
+project-wiki scope --project <path>
+project-wiki list --wiki <path> --type class
+project-wiki context --wiki <path> --topic authentication
+project-wiki validate --wiki <path> --require-documents --min-coverage 0.7
 ```
 
 See `scripts/README.md` for the full command list and current

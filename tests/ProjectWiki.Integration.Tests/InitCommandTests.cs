@@ -108,6 +108,33 @@ public class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public void ScopeListContextAndRequireDocuments_AreWiredThroughCli()
+    {
+        var (scopeCode, scopeOutput, scopeError) = CliRunner.Run("scope", "--project", _fixtureRoot);
+        Assert.True(scopeCode == 0, $"scope failed. stdout: {scopeOutput}\nstderr: {scopeError}");
+        using var scope = JsonDocument.Parse(scopeOutput);
+        Assert.True(scope.RootElement.GetProperty("includedFileCount").GetInt32() > 0);
+
+        var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot, "--include", "Combat/**");
+        Assert.Equal(0, init.ExitCode);
+
+        var (listCode, listOutput, listError) = CliRunner.Run("list", "--wiki", _wikiRoot, "--type", "class", "--source", "Combat/**");
+        Assert.True(listCode == 0, $"list failed. stdout: {listOutput}\nstderr: {listError}");
+        using var list = JsonDocument.Parse(listOutput);
+        Assert.True(list.RootElement.GetProperty("count").GetInt32() > 0);
+
+        var (contextCode, contextOutput, contextError) = CliRunner.Run("context", "--wiki", _wikiRoot, "--topic", "Combat");
+        Assert.True(contextCode == 0, $"context failed. stdout: {contextOutput}\nstderr: {contextError}");
+        using var context = JsonDocument.Parse(contextOutput);
+        Assert.True(context.RootElement.GetProperty("entities").GetArrayLength() > 0);
+
+        var (validateCode, validateOutput, _) = CliRunner.Run("validate", "--wiki", _wikiRoot, "--require-documents", "--min-coverage", "0.7");
+        Assert.NotEqual(0, validateCode);
+        using var validate = JsonDocument.Parse(validateOutput);
+        Assert.NotEmpty(validate.RootElement.GetProperty("qualityIssues").EnumerateArray());
+    }
+
+    [Fact]
     public void Build_WritesStaticSiteAndServeRejectsAnInvalidPort()
     {
         var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);
