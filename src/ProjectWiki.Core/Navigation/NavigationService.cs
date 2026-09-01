@@ -5,6 +5,12 @@ namespace ProjectWiki.Core.Navigation;
 
 public sealed class NavigationService
 {
+    private static readonly string[] ManualSectionPlaceholderPrefixes =
+    [
+        "Developer Notes",
+        "사용자가 직접 작성",
+    ];
+
     public WikiNavigationResult Build(string wikiRoot)
     {
         var store = new NavigationStore();
@@ -468,8 +474,7 @@ public sealed class NavigationService
             .Select(line => line.Trim())
             .Where(line => line.Length > 0
                 && !line.StartsWith('#')
-                && !line.StartsWith("사용자가 직접 작성", StringComparison.OrdinalIgnoreCase)
-                && !line.StartsWith("Developer Notes", StringComparison.OrdinalIgnoreCase));
+                && !ManualSectionPlaceholderPrefixes.Any(prefix => line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
         return manual.Any();
     }
 

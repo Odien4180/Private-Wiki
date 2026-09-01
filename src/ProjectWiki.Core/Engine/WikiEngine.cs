@@ -395,13 +395,14 @@ public sealed class WikiEngine
             .ToList();
         var offset = Math.Max(0, options.Offset);
         var limit = NormalizeLimit(options.Limit, defaultLimit: 100);
+        var page = summaries.Skip(offset).Take(limit).ToList();
         return new WikiListResult
         {
             TotalCount = summaries.Count,
             Offset = offset,
             Limit = limit,
-            Count = summaries.Skip(offset).Take(limit).Count(),
-            Entities = summaries.Skip(offset).Take(limit).ToList(),
+            Count = page.Count,
+            Entities = page,
         };
     }
 
