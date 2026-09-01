@@ -27,25 +27,30 @@ Required:
 
 - init
 - update
+- scope
 - inspect
 - validate
 - rebuild
+- build
 - serve
 
 > Implementation status: all commands are implemented through Milestone 6:
-> `init`, `update`, `inspect`, `validate`, `rebuild`, `build`, and `serve`.
+> `scope`, `init`, `update`, `rebuild`, `list`, `inspect`, `context`,
+> `navigation build`, `validate`, `build`, and `serve`.
 
 ## Workflow
 
 Before first initialization:
 read docs/architecture.md
 read docs/analysis-rules.md
+read references/scope-selection.md
 
 For Unity projects:
 read docs/unity-analysis.md
 
 Before document generation:
 read docs/document-rules.md
+read references/authoring-workflow.md
 
 Before cross-link processing:
 read docs/linking-rules.md
@@ -53,9 +58,11 @@ read docs/caption-rules.md
 
 For an existing wiki:
 read docs/incremental-update.md
+read references/update-workflow.md
 
 Before completing:
 read docs/validation.md
+read references/quality-gates.md
 
 Never infer deterministic source facts that can be obtained
 from the supplied analysis tools.
@@ -71,8 +78,10 @@ init or update
 → write Markdown AGENT blocks
 → insert wiki links
 → write source captions from evidence
-→ validate
-→ build
+→ build or navigation build to regenerate backlinks
+→ validate --require-documents
+→ fix, build, and validate again as needed
+→ final build
 ```
 
 Write authored documentation under `documents/project/`,
@@ -90,11 +99,30 @@ classification, prose generation, cross-link context resolution, captions).
 
 ```bash
 project-wiki init --project <path> --wiki <path>
-project-wiki scope --project <path>
-project-wiki list --wiki <path> --type class
-project-wiki context --wiki <path> --topic authentication
+project-wiki scope --project <path> --summary
+project-wiki list --wiki <path> --type class --limit 100
+project-wiki context --wiki <path> --topic authentication --limit 50
+project-wiki navigation build --wiki <path>
 project-wiki validate --wiki <path> --require-documents --min-coverage 0.7
 ```
 
 See `scripts/README.md` for the full command list and current
 implementation status.
+
+## Installation and fallback
+
+When `project-wiki` is not available on `PATH`, first try:
+
+```bash
+dotnet tool install --global ProjectWiki.Cli
+```
+
+For local development of this repository, use:
+
+```bash
+dotnet run --project <skill-repo>/src/ProjectWiki.Cli -- <command>
+```
+
+If neither the global tool nor the local source checkout is available, stop and
+tell the user how to install the skill and CLI instead of guessing analysis
+facts.

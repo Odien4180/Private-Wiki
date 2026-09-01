@@ -393,10 +393,15 @@ public sealed class WikiEngine
             .OrderBy(entity => entity.Id, StringComparer.Ordinal)
             .Select(CreateEntitySummary)
             .ToList();
+        var offset = Math.Max(0, options.Offset);
+        var limit = NormalizeLimit(options.Limit, defaultLimit: 100);
         return new WikiListResult
         {
-            Count = summaries.Count,
-            Entities = summaries,
+            TotalCount = summaries.Count,
+            Offset = offset,
+            Limit = limit,
+            Count = summaries.Skip(offset).Take(limit).Count(),
+            Entities = summaries.Skip(offset).Take(limit).ToList(),
         };
     }
 
@@ -423,7 +428,12 @@ public sealed class WikiEngine
                 || entity.Sources.Any(source => Contains(source, topic)));
         }
 
-        var seedIds = seeds.Select(entity => entity.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var limit = NormalizeLimit(options.Limit, defaultLimit: 50);
+        var seedIds = seeds
+            .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+            .Take(limit)
+            .Select(entity => entity.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var depth = Math.Max(1, options.Depth);
         foreach (var seed in seedIds.ToList())
         {
@@ -446,11 +456,12 @@ public sealed class WikiEngine
             Entities = data.Entities.Entities
                 .Where(entity => seedIds.Contains(entity.Id))
                 .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+                .Take(limit)
                 .Select(CreateEntitySummary)
                 .ToList(),
-            IncomingRelations = incoming,
-            OutgoingRelations = outgoing,
-            Backlinks = backlinks,
+            IncomingRelations = incoming.Take(limit).ToList(),
+            OutgoingRelations = outgoing.Take(limit).ToList(),
+            Backlinks = backlinks.Take(limit).ToList(),
         };
     }
 
@@ -787,6 +798,9 @@ public sealed class WikiEngine
 
     private static bool Contains(string? value, string query) =>
         value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static int NormalizeLimit(int value, int defaultLimit) =>
+        value <= 0 ? defaultLimit : Math.Min(value, 1_000);
 
     private static List<Relation> OrderRelations(IEnumerable<Relation> relations) => relations
         .OrderBy(relation => relation.Source, StringComparer.Ordinal)

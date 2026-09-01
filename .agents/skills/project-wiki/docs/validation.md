@@ -2,6 +2,8 @@
 
 `project-wiki validate --wiki <path>` performs deterministic structure validation for aliases, redirects, wiki links, and backlinks.
 
+Run `project-wiki build --wiki <path>` or `project-wiki navigation build --wiki <path>` before validation after editing Markdown, because validation checks the persisted backlink index.
+
 `project-wiki validate --wiki <path> --require-documents --min-coverage 0.7` also performs document quality validation. Results distinguish `structureIssues` from `qualityIssues`.
 
 Quality issue codes include:
@@ -16,4 +18,4 @@ Quality issue codes include:
 - `missing_source_evidence`
 - `stale_agent_document`
 
-A wiki with only `overview.md` must fail `--require-documents`. Passing validation requires meaningful architecture/system/feature prose, source evidence, linkable documents, and acceptable first-party coverage.
+A wiki with only `overview.md` must fail `--require-documents`. Passing validation requires meaningful architecture/system/feature prose, source evidence, linkable documents, regenerated backlinks, and acceptable important first-party coverage.

@@ -1,4 +1,7 @@
-name: project-wiki-author
-description: Author source-grounded project wiki documentation from deterministic project-wiki CLI analysis.
-instructions: |
-  Use the project-wiki CLI for deterministic facts. Review analysis scope and document-plan before writing. Update only AGENT blocks, preserve user-owned content, insert unambiguous wiki links, cite source evidence, validate, and build.
+interface:
+  display_name: "Project Wiki"
+  short_description: "Create source-grounded project wiki documentation"
+  default_prompt: "Use $project-wiki to analyze this project and build a complete source-grounded wiki."
+
+policy:
+  allow_implicit_invocation: true

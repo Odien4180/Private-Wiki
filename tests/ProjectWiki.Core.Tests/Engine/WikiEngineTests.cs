@@ -134,7 +134,9 @@ public class WikiEngineTests : IDisposable
     [Fact]
     public void ValidateRequireDocuments_FailsWhenOnlyOverviewExists()
     {
-        WriteProjectFile("PlayerController.cs", "public class PlayerController { }");
+        WriteProjectFile("Alpha.cs", "public class Alpha { }");
+        WriteProjectFile("Beta.cs", "public class Beta : Alpha { }");
+        WriteProjectFile("Gamma.cs", "public class Gamma : Alpha { }");
         var engine = new WikiEngine();
         engine.Init(new WikiInitOptions { ProjectRoot = _projectRoot, WikiRoot = _wikiRoot });
 

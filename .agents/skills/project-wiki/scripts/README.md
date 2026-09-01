@@ -17,25 +17,50 @@ tests/                   # unit + integration tests, fixtures
 ```bash
 dotnet build
 dotnet test
+dotnet pack src/ProjectWiki.Cli/ProjectWiki.Cli.csproj -c Release
+```
+
+## Install as a .NET global tool
+
+From a published package feed:
+
+```bash
+dotnet tool install --global ProjectWiki.Cli
+```
+
+From a local package during development:
+
+```bash
+dotnet pack src/ProjectWiki.Cli/ProjectWiki.Cli.csproj -c Release -o /tmp/project-wiki-pack
+dotnet tool install --global ProjectWiki.Cli --add-source /tmp/project-wiki-pack
+```
+
+If `project-wiki` is not on `PATH`, run the CLI from this repository:
+
+```bash
+dotnet run --project src/ProjectWiki.Cli -- <command>
 ```
 
 ## Commands (current status)
 
 | Command | Status |
 |---|---|
-| `project-wiki scope --project <path> [--include <glob>] [--exclude <glob>]` | Implemented |
+| `project-wiki scope --project <path> [--summary] [--limit <n>] [--include <glob>] [--exclude <glob>]` | Implemented |
 | `project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>] [--include <glob>] [--exclude <glob>]` | Implemented (Milestones 1 and 5 plus scope controls) |
 | `project-wiki update --wiki <path>` | Implemented (Milestones 4 and 5) |
 | `project-wiki rebuild --wiki <path>` | Implemented (Milestones 4 and 5) |
-| `project-wiki list --wiki <path> [--type <type>] [--source <glob>]` | Implemented |
+| `project-wiki list --wiki <path> [--type <type>] [--source <glob>] [--limit <n>] [--offset <n>]` | Implemented |
 | `project-wiki inspect <entity> --wiki <path> [--depth <n>]` | Implemented (Milestone 4 plus depth) |
-| `project-wiki context --wiki <path> [--topic <text>] [--source <glob>] [--depth <n>]` | Implemented |
+| `project-wiki context --wiki <path> [--topic <text>] [--source <glob>] [--depth <n>] [--limit <n>]` | Implemented |
+| `project-wiki navigation build --wiki <path>` | Implemented |
 | `project-wiki validate --wiki <path> [--require-documents] [--min-coverage <0..1>]` | Implemented (navigation plus quality gates) |
 | `project-wiki build --wiki <path>` | Implemented (Milestone 6) |
 | `project-wiki serve --wiki <path> [--port <1-65535>]` | Implemented (Milestone 6) |
 
 `scope` previews the effective analysis scope, including default exclusions,
 Unity vendor exclusions, user include/exclude patterns, and review candidates.
+Use `--summary` for large projects; detailed file lists are capped by
+`--limit` on stdout.
 `init` scans the project, runs the C# static analyzer, and, only for detected
 Unity projects, extracts `.meta` GUID mappings, serialized scene/prefab/asset
 GUID references, assembly definition references, and manifest package facts.
@@ -58,6 +83,7 @@ and backlinks as JSON. Unity projects rerun the same Unity analyzer on update
 and rebuild; other project types run no Unity analysis. `list`, `inspect`, and
 `context` provide filtered access to large knowledge graphs so agents do not
 need to read large `entities.json` and `relations.json` files directly.
+`navigation build` regenerates backlinks without requiring a full site render.
 
 `build` deterministically renders Markdown documents into `<wiki>/site`,
 including a sidebar, per-page table of contents, resolved wiki links,

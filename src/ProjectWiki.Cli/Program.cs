@@ -34,6 +34,8 @@ switch (command)
         return RunContext(options);
     case "validate":
         return RunValidate(options);
+    case "navigation":
+        return RunNavigation(commandArguments, options);
     case "build":
         return RunBuild(options);
     case "serve":
@@ -102,7 +104,10 @@ static int RunScope(Dictionary<string, string> options)
             projectType,
             GetOptionValues(options, "exclude"),
             GetOptionValues(options, "include"));
-        Console.WriteLine(JsonSerializer.Serialize(report, JsonOptions.Default));
+        var output = options.ContainsKey("summary")
+            ? CreateScopeSummary(report)
+            : LimitScopeReport(report, TryGetInt(options, "limit", defaultValue: 100, min: 0));
+        Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions.Default));
         return 0;
     }
     catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or ArgumentException)
@@ -184,6 +189,8 @@ static int RunList(Dictionary<string, string> options)
             WikiRoot = wikiRoot,
             Type = options.GetValueOrDefault("type"),
             Source = options.GetValueOrDefault("source"),
+            Limit = TryGetInt(options, "limit", defaultValue: 100, min: 1),
+            Offset = TryGetInt(options, "offset", defaultValue: 0, min: 0),
         });
         Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Default));
         return 0;
@@ -211,6 +218,7 @@ static int RunContext(Dictionary<string, string> options)
             Topic = options.GetValueOrDefault("topic"),
             Source = options.GetValueOrDefault("source"),
             Depth = TryGetInt(options, "depth", defaultValue: 1, min: 1),
+            Limit = TryGetInt(options, "limit", defaultValue: 50, min: 1),
         });
         Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Default));
         return 0;
@@ -218,6 +226,34 @@ static int RunContext(Dictionary<string, string> options)
     catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
     {
         Console.Error.WriteLine($"context failed: {ex.Message}");
+        return 1;
+    }
+}
+
+static int RunNavigation(string[] arguments, Dictionary<string, string> options)
+{
+    var subcommand = arguments.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal));
+    if (!string.Equals(subcommand, "build", StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine("Missing or unknown navigation subcommand: navigation build --wiki <path>");
+        return 1;
+    }
+
+    if (!options.TryGetValue("wiki", out var wikiRoot) || string.IsNullOrWhiteSpace(wikiRoot))
+    {
+        Console.Error.WriteLine("Missing required option: --wiki <path>");
+        return 1;
+    }
+
+    try
+    {
+        var result = new WikiEngine().BuildNavigation(new WikiNavigationOptions { WikiRoot = wikiRoot });
+        Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Default));
+        return result.Validation.IsValid ? 0 : 1;
+    }
+    catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+    {
+        Console.Error.WriteLine($"navigation build failed: {ex.Message}");
         return 1;
     }
 }
@@ -346,6 +382,57 @@ static IReadOnlyList<string> GetOptionValues(Dictionary<string, string> options,
     return value.Split(new[] { '\n', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
+static object CreateScopeSummary(AnalysisScopeReport report) => new
+{
+    projectType = report.ProjectType,
+    include = report.Include,
+    defaultExclude = report.DefaultExclude,
+    unityExclude = report.UnityExclude,
+    userExclude = report.UserExclude,
+    effectiveExcludeCount = report.EffectiveExclude.Count,
+    reviewCandidates = report.ReviewCandidates,
+    totalFileCount = report.TotalFileCount,
+    includedFileCount = report.IncludedFileCount,
+    excludedFileCount = report.ExcludedFileCount,
+    candidateFileCount = report.CandidateFiles.Count,
+};
+
+static AnalysisScopeReport LimitScopeReport(AnalysisScopeReport report, int limit)
+{
+    if (limit == 0)
+    {
+        return new AnalysisScopeReport
+        {
+            ProjectType = report.ProjectType,
+            Include = report.Include,
+            DefaultExclude = report.DefaultExclude,
+            UnityExclude = report.UnityExclude,
+            UserExclude = report.UserExclude,
+            EffectiveExclude = report.EffectiveExclude,
+            ReviewCandidates = report.ReviewCandidates,
+            TotalFileCount = report.TotalFileCount,
+            IncludedFileCount = report.IncludedFileCount,
+            ExcludedFileCount = report.ExcludedFileCount,
+        };
+    }
+
+    return new AnalysisScopeReport
+    {
+        ProjectType = report.ProjectType,
+        Include = report.Include,
+        DefaultExclude = report.DefaultExclude,
+        UnityExclude = report.UnityExclude,
+        UserExclude = report.UserExclude,
+        EffectiveExclude = report.EffectiveExclude,
+        ReviewCandidates = report.ReviewCandidates,
+        TotalFileCount = report.TotalFileCount,
+        IncludedFileCount = report.IncludedFileCount,
+        ExcludedFileCount = report.ExcludedFileCount,
+        ExcludedFiles = report.ExcludedFiles.Take(limit).ToList(),
+        CandidateFiles = report.CandidateFiles.Take(limit).ToList(),
+    };
+}
+
 static int TryGetInt(Dictionary<string, string> options, string name, int defaultValue, int min)
 {
     if (!options.TryGetValue(name, out var value))
@@ -389,13 +476,14 @@ static void PrintUsage()
         project-wiki - reusable project wiki engine (Milestone 6: static site)
 
         Usage:
-          project-wiki scope --project <path> [--include <glob>] [--exclude <glob>]
+          project-wiki scope --project <path> [--summary] [--limit <n>] [--include <glob>] [--exclude <glob>]
           project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>] [--include <glob>] [--exclude <glob>]
           project-wiki update --wiki <path>
           project-wiki rebuild --wiki <path>
-          project-wiki list --wiki <path> [--type <type>] [--source <glob>]
+          project-wiki list --wiki <path> [--type <type>] [--source <glob>] [--limit <n>] [--offset <n>]
           project-wiki inspect <entity> --wiki <path> [--depth <n>]
-          project-wiki context --wiki <path> [--topic <text>] [--source <glob>] [--depth <n>]
+          project-wiki context --wiki <path> [--topic <text>] [--source <glob>] [--depth <n>] [--limit <n>]
+          project-wiki navigation build --wiki <path>
           project-wiki validate --wiki <path> [--require-documents] [--min-coverage <0..1>]
           project-wiki build --wiki <path>
           project-wiki serve --wiki <path> [--port <1-65535>]

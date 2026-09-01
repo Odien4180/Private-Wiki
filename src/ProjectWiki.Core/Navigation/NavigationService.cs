@@ -240,16 +240,6 @@ public sealed class NavigationService
         var firstPartyEntities = data.Entities.Entities
             .Where(entity => CodeOwnershipClassifier.Classify(entity) == "first_party" && entity.Sources.Count > 0)
             .ToList();
-        if (firstPartyEntities.Count > 0 && minCoverage > 0)
-        {
-            var documented = firstPartyEntities.Count(entity => IsEntityDocumented(entity, docs));
-            var coverage = documented / (double)firstPartyEntities.Count;
-            if (coverage < minCoverage)
-            {
-                AddIssue(issues, "first_party_coverage_too_low", $"First-party documentation coverage {coverage:0.##} is below required {minCoverage:0.##}.");
-            }
-        }
-
         var relationCounts = data.Entities.Entities
             .ToDictionary(entity => entity.Id, _ => 0, StringComparer.OrdinalIgnoreCase);
         var relationsPath = Path.Combine(wikiRoot, "knowledge", "relations.json");
@@ -269,9 +259,20 @@ public sealed class NavigationService
             }
         }
 
-        foreach (var entity in firstPartyEntities
-                     .Where(entity => relationCounts.GetValueOrDefault(entity.Id) >= 2)
-                     .Where(entity => !IsEntityDocumented(entity, docs)))
+        var importantFirstPartyEntities = firstPartyEntities
+            .Where(entity => IsImportantEntity(entity, relationCounts.GetValueOrDefault(entity.Id)))
+            .ToList();
+        if (importantFirstPartyEntities.Count > 0 && minCoverage > 0)
+        {
+            var documented = importantFirstPartyEntities.Count(entity => IsEntityDocumented(entity, docs));
+            var coverage = documented / (double)importantFirstPartyEntities.Count;
+            if (coverage < minCoverage)
+            {
+                AddIssue(issues, "first_party_coverage_too_low", $"Important first-party documentation coverage {coverage:0.##} is below required {minCoverage:0.##}.");
+            }
+        }
+
+        foreach (var entity in importantFirstPartyEntities.Where(entity => !IsEntityDocumented(entity, docs)))
         {
             AddIssue(issues, "undocumented_important_entity", $"Important entity '{entity.Id}' has graph references but no document coverage.");
         }
@@ -565,6 +566,14 @@ public sealed class NavigationService
             doc.Content.Contains($"[[{entity.Id}", StringComparison.OrdinalIgnoreCase)
             || doc.Content.Contains(entity.Title, StringComparison.OrdinalIgnoreCase)
             || entity.Sources.Any(source => doc.Content.Contains(source, StringComparison.OrdinalIgnoreCase)));
+
+    private static bool IsImportantEntity(ProjectWiki.Core.Model.Entity entity, int relationCount) =>
+        relationCount >= 2
+        || entity.Type is ProjectWiki.Core.Model.EntityType.Scene
+            or ProjectWiki.Core.Model.EntityType.Prefab
+            or ProjectWiki.Core.Model.EntityType.Component
+            or ProjectWiki.Core.Model.EntityType.Service
+            or ProjectWiki.Core.Model.EntityType.Manager;
 
     private static void AddIssue(List<NavigationValidationIssue> issues, string code, string message, WikiLink? link = null) =>
         issues.Add(new NavigationValidationIssue

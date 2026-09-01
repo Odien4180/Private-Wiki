@@ -10,6 +10,10 @@ public sealed class WikiListOptions
     public string? Type { get; init; }
 
     public string? Source { get; init; }
+
+    public int Limit { get; init; } = 100;
+
+    public int Offset { get; init; }
 }
 
 public sealed class EntitySummary
@@ -35,6 +39,12 @@ public sealed class WikiListResult
 {
     public required int Count { get; init; }
 
+    public required int TotalCount { get; init; }
+
+    public required int Offset { get; init; }
+
+    public required int Limit { get; init; }
+
     public List<EntitySummary> Entities { get; init; } = new();
 }
 
@@ -47,6 +57,8 @@ public sealed class WikiContextOptions
     public string? Source { get; init; }
 
     public int Depth { get; init; } = 1;
+
+    public int Limit { get; init; } = 50;
 }
 
 public sealed class WikiContextResult
