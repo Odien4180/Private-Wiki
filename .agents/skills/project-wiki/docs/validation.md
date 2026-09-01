@@ -1,8 +1,15 @@
-# Validation (Planned - Milestone 3/4)
+# Validation (Milestone 3 Navigation Core)
 
-This document will define the deterministic validator checks: broken
-links, broken redirects, redirect cycles, duplicate entity ids, ambiguous
-links, orphan documents, invalid source paths, missing sources, invalid
-relations, and stale documents.
+`WikiEngine.ValidateNavigation` performs read-only, deterministic validation
+of persisted navigation data and Markdown documents. It reports:
 
-Not yet implemented. See `docs/architecture.md` for the milestone plan.
+- duplicate entity ids, aliases, and redirects;
+- empty aliases or redirects, aliases targeting missing entities, and redirects
+  that are broken, ambiguous, shadow an entity id, or cycle;
+- malformed, broken, and ambiguous `[[wiki links]]`;
+- a missing, stale, duplicated, or otherwise invalid backlink entry.
+
+`WikiEngine.BuildNavigation` rebuilds `knowledge/backlinks.json` from the
+current Markdown documents using atomic replacement. It preserves existing
+aliases and redirects. `project-wiki validate --wiki <path>` exposes the
+validation result as JSON and returns nonzero when validation fails.

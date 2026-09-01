@@ -23,4 +23,10 @@ public sealed class Entity
 
     /// <summary>Fully-qualified or otherwise unambiguous symbol names for this entity, if any.</summary>
     public List<string> Symbols { get; init; } = new();
+
+    public string? Namespace { get; init; }
+
+    public List<string> Members { get; init; } = new();
+
+    public List<string> Attributes { get; init; } = new();
 }

@@ -32,9 +32,8 @@ Required:
 - rebuild
 - serve
 
-> Implementation status: `init` (Milestone 1, deterministic core only) is
-> implemented. `update`, `inspect`, `validate`, `rebuild` and `serve` are
-> planned for later milestones (see `docs/` for the milestone breakdown).
+> Implementation status: all commands are implemented through Milestone 6:
+> `init`, `update`, `inspect`, `validate`, `rebuild`, `build`, and `serve`.
 
 ## Workflow
 

@@ -9,15 +9,18 @@
     "type": {
       "type": "string",
       "enum": [
-        "project", "architecture", "system", "feature", "class", "interface",
-        "service", "manager", "component", "scene", "prefab", "data",
+        "project", "architecture", "system", "feature", "class", "struct", "enum", "interface",
+        "service", "manager", "component", "asset", "scene", "prefab", "data",
         "config", "package", "external", "tool"
       ]
     },
     "title": { "type": "string" },
     "aliases": { "type": "array", "items": { "type": "string" } },
     "sources": { "type": "array", "items": { "type": "string" } },
-    "symbols": { "type": "array", "items": { "type": "string" } }
+    "symbols": { "type": "array", "items": { "type": "string" } },
+    "namespace": { "type": "string" },
+    "members": { "type": "array", "items": { "type": "string" } },
+    "attributes": { "type": "array", "items": { "type": "string" } }
   },
   "additionalProperties": true
 }

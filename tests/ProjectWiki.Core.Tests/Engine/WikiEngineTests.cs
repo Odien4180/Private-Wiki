@@ -52,6 +52,7 @@ public class WikiEngineTests : IDisposable
 
         Assert.Equal(2, result.EntityCount);
         Assert.Equal(1, result.RelationCount);
+        Assert.Equal(ProjectWiki.Core.Config.ProjectType.Generic, result.ProjectType);
         Assert.False(result.IsGitRepository);
 
         Assert.True(File.Exists(Path.Combine(_wikiRoot, "wiki.config.json")));
@@ -62,6 +63,9 @@ public class WikiEngineTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_wikiRoot, "tracking", "git.json")));
         Assert.True(Directory.Exists(Path.Combine(_wikiRoot, "documents", "systems")));
         Assert.True(Directory.Exists(Path.Combine(_wikiRoot, "site")));
+        var architectureDocument = Path.Combine(_wikiRoot, "documents", "architecture", "overview.md");
+        Assert.True(File.Exists(architectureDocument));
+        Assert.Contains("2 extracted entities", File.ReadAllText(architectureDocument));
 
         var entitiesJson = File.ReadAllText(Path.Combine(_wikiRoot, "knowledge", "entities.json"));
         using var doc = JsonDocument.Parse(entitiesJson);
@@ -82,6 +86,70 @@ public class WikiEngineTests : IDisposable
             ProjectRoot = Path.Combine(_projectRoot, "does-not-exist"),
             WikiRoot = _wikiRoot,
         }));
+    }
+
+    [Fact]
+    public void Update_DetectsSourceChangesPreservesManualContentAndRecordsImpact()
+    {
+        WriteProjectFile("Alpha.cs", "public class Alpha { }");
+        WriteProjectFile("Beta.cs", "public class Beta : Alpha { }");
+        var engine = new WikiEngine();
+        engine.Init(new WikiInitOptions { ProjectRoot = _projectRoot, WikiRoot = _wikiRoot });
+        var overview = Path.Combine(_wikiRoot, "documents", "architecture", "overview.md");
+        File.AppendAllText(overview, "Manual content must survive.");
+        WriteProjectFile("Alpha.cs", "public class Alpha { public int Value { get; set; } }");
+
+        var result = engine.Update(new WikiUpdateOptions { WikiRoot = _wikiRoot });
+
+        var change = Assert.Single(result.Changes);
+        Assert.Equal(FileChangeType.Modified, change.Type);
+        Assert.Equal("Alpha.cs", change.Path);
+        Assert.Contains("alpha", result.Impact.DirectEntityIds);
+        Assert.Contains("beta", result.Impact.RelatedEntityIds);
+        Assert.Contains("Manual content must survive.", File.ReadAllText(overview));
+        using var updates = JsonDocument.Parse(File.ReadAllText(Path.Combine(_wikiRoot, "tracking", "updates.json")));
+        var update = Assert.Single(updates.RootElement.GetProperty("updates").EnumerateArray());
+        Assert.Equal("modified", update.GetProperty("changes")[0].GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void Update_DetectsRenamesAndInspect_ResolvesGeneratedAliases()
+    {
+        WriteProjectFile("OldFolder/Character.cs", "public class Character { }");
+        var engine = new WikiEngine();
+        engine.Init(new WikiInitOptions { ProjectRoot = _projectRoot, WikiRoot = _wikiRoot });
+        Directory.CreateDirectory(Path.Combine(_projectRoot, "NewFolder"));
+        File.Move(
+            Path.Combine(_projectRoot, "OldFolder", "Character.cs"),
+            Path.Combine(_projectRoot, "NewFolder", "Character.cs"));
+
+        var update = engine.Update(new WikiUpdateOptions { WikiRoot = _wikiRoot });
+        var rename = Assert.Single(update.Changes);
+        Assert.Equal(FileChangeType.Renamed, rename.Type);
+        Assert.Equal("OldFolder/Character.cs", rename.PreviousPath);
+        Assert.Equal("NewFolder/Character.cs", rename.Path);
+        var inspection = engine.Inspect(new WikiInspectOptions { WikiRoot = _wikiRoot, Entity = "Character" });
+
+        Assert.True(inspection.IsFound);
+        Assert.Equal("character", inspection.EntityId);
+        Assert.Equal(new[] { "NewFolder/Character.cs" }, inspection.Entity!.Sources);
+    }
+
+    [Fact]
+    public void Rebuild_PreservesManualDocumentsAndMarksTheUpdateRecord()
+    {
+        WriteProjectFile("Character.cs", "public class Character { }");
+        var engine = new WikiEngine();
+        engine.Init(new WikiInitOptions { ProjectRoot = _projectRoot, WikiRoot = _wikiRoot });
+        var overview = Path.Combine(_wikiRoot, "documents", "architecture", "overview.md");
+        File.AppendAllText(overview, "Manual rebuild note.");
+
+        var result = engine.Rebuild(new WikiRebuildOptions { WikiRoot = _wikiRoot });
+
+        Assert.True(result.IsRebuild);
+        Assert.Contains("Manual rebuild note.", File.ReadAllText(overview));
+        var updates = JsonDocument.Parse(File.ReadAllText(Path.Combine(_wikiRoot, "tracking", "updates.json")));
+        Assert.True(updates.RootElement.GetProperty("updates")[0].GetProperty("isRebuild").GetBoolean());
     }
 
     private void WriteProjectFile(string relativePath, string content)

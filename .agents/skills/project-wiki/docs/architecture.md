@@ -90,11 +90,12 @@ as functionality grows:
   Roslyn analyzer, entity/relation model, tests. *(implemented)*
 - **M2 - Wiki Documents**: document planner, Markdown storage, AUTO block
   handling, templates, human-content preservation.
-- **M3 - Wiki Navigation**: cross-link, alias, redirect, backlink, caption,
-  validation.
+- **M3 - Wiki Navigation**: deterministic alias, redirect, Markdown wiki-link,
+  backlink, and navigation-validation core. CLI wiring, captions, and
+  agent-authored cross-link insertion remain later work.
 - **M4 - Incremental Update**: git tracking, hash tracking, rename
   detection, impact analysis, incremental document update, recent changes.
-- **M5 - Unity**: GUID, scene, prefab, ScriptableObject, asmdef, package
-  analysis.
-- **M6 - Web UI**: site generator, search, TOC, caption popup, backlinks,
-  health, serve.
+- **M5 - Unity**: GUID, scene, prefab, asset, asmdef, and package analysis.
+  *(implemented)*
+- **M6 - Web UI**: deterministic static site generator, JSON search, TOC,
+  source captions, backlinks, health report, and loopback-only serve.

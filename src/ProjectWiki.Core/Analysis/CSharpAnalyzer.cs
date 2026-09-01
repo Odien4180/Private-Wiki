@@ -49,7 +49,7 @@ public sealed class CSharpAnalyzer
         foreach (var (file, tree) in parsed)
         {
             var model = compilation.GetSemanticModel(tree);
-            foreach (var declaration in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+            foreach (var declaration in tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
                 if (model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol)
                 {
@@ -71,10 +71,13 @@ public sealed class CSharpAnalyzer
                 var entity = new Entity
                 {
                     Id = id,
-                    Type = declaration is InterfaceDeclarationSyntax ? EntityType.Interface : EntityType.Class,
+                    Type = GetEntityType(declaration),
                     Title = symbol.Name,
                     Sources = new List<string> { file.RelativePath },
                     Symbols = new List<string> { symbol.ToDisplayString() },
+                    Namespace = symbol.ContainingNamespace?.ToDisplayString(),
+                    Members = GetMembers(symbol),
+                    Attributes = symbol.GetAttributes().Select(attribute => attribute.AttributeClass?.ToDisplayString() ?? attribute.ToString() ?? string.Empty).OrderBy(name => name, StringComparer.Ordinal).ToList(),
                 };
 
                 symbolToEntity[symbol] = entity;
@@ -121,6 +124,20 @@ public sealed class CSharpAnalyzer
 
         return result;
     }
+
+    private static EntityType GetEntityType(BaseTypeDeclarationSyntax declaration) => declaration switch
+    {
+        InterfaceDeclarationSyntax => EntityType.Interface,
+        StructDeclarationSyntax => EntityType.Struct,
+        EnumDeclarationSyntax => EntityType.Enum,
+        _ => EntityType.Class,
+    };
+
+    private static List<string> GetMembers(INamedTypeSymbol symbol) => symbol.GetMembers()
+        .Where(member => !member.IsImplicitlyDeclared)
+        .Select(member => member.ToDisplayString())
+        .OrderBy(member => member, StringComparer.Ordinal)
+        .ToList();
 
     private static void AddRelation(
         AnalysisResult result,

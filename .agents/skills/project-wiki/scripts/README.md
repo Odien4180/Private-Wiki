@@ -23,19 +23,40 @@ dotnet test
 
 | Command | Status |
 |---|---|
-| `project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]` | Implemented (Milestone 1: deterministic core only) |
-| `project-wiki update --wiki <path>` | Planned (Milestone 4) |
-| `project-wiki inspect <entity> --wiki <path>` | Planned |
-| `project-wiki validate --wiki <path>` | Planned (Milestone 3/4) |
-| `project-wiki build --wiki <path>` | Planned (Milestone 6) |
-| `project-wiki serve --wiki <path>` | Planned (Milestone 6) |
+| `project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]` | Implemented (Milestones 1 and 5) |
+| `project-wiki update --wiki <path>` | Implemented (Milestones 4 and 5) |
+| `project-wiki rebuild --wiki <path>` | Implemented (Milestones 4 and 5) |
+| `project-wiki inspect <entity> --wiki <path>` | Implemented (Milestone 4) |
+| `project-wiki validate --wiki <path>` | Implemented (Milestone 3) |
+| `project-wiki build --wiki <path>` | Implemented (Milestone 6) |
+| `project-wiki serve --wiki <path> [--port <1-65535>]` | Implemented (Milestone 6) |
 
-`init` scans the project, runs the C# static analyzer, builds the initial
-knowledge graph (entities + relations with evidence), and persists it
-under `wiki_root` (`wiki.config.json`, `knowledge/`, `tracking/`, plus an
-empty `documents/`, `reports/`, `site/` skeleton for later milestones). It
-does not generate any Markdown documents, cross-links, captions, or a
-website yet.
+`init` scans the project, runs the C# static analyzer, and, only for detected
+Unity projects, extracts `.meta` GUID mappings, serialized scene/prefab/asset
+GUID references, assembly definition references, and manifest package facts.
+It builds the initial knowledge graph (entities + relations with evidence),
+persists it under `wiki_root`, and generates the initial architecture document.
+It initializes typed aliases and redirects and atomically writes an empty
+backlink index.
+The public `WikiEngine.BuildNavigation` and
+`WikiEngine.ValidateNavigation` methods provide the Milestone 3 deterministic
+navigation core; corresponding CLI commands are not wired yet.
+
+`update` compares the persisted and current SHA-256 source snapshots to
+deterministically report additions, modifications, deletions, and unambiguous
+renames. It reindexes the graph, calculates relation-graph impact, appends a
+typed entry to `tracking/updates.json`, and only refreshes document `AUTO`
+blocks. `rebuild` performs the same full reindex explicitly. `inspect` resolves
+an entity id, alias, or redirect and returns the entity, adjacent relations,
+and backlinks as JSON. Unity projects rerun the same Unity analyzer on update
+and rebuild; other project types run no Unity analysis.
+
+`build` deterministically renders Markdown documents into `<wiki>/site`,
+including a sidebar, per-page table of contents, resolved wiki links,
+backlinks, source captions from `knowledge/captions.json`, a client-side
+`search-index.json`, and `reports/site-health.json`. `serve` first performs
+the same build, then exposes only generated files over `127.0.0.1`; it rejects
+path traversal requests and non-loopback binding.
 
 Example:
 
