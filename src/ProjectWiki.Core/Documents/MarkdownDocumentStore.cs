@@ -44,7 +44,7 @@ public sealed class MarkdownDocumentStore
         var start = content.IndexOf(startMarker, StringComparison.Ordinal);
         var end = content.IndexOf(endMarker, StringComparison.Ordinal);
 
-        if (start < 0 || end < 0 || end < start)
+        if (start < 0 || end < 0 || end < start + startMarker.Length)
         {
             throw new InvalidDataException($"Document is missing a valid AUTO block for '{section}'.");
         }

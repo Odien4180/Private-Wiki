@@ -17,7 +17,7 @@ public sealed class InitialDocumentPlanner : IDocumentPlanner
                 Template = DocumentTemplate.Architecture,
                 AutoSections = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["SUMMARY"] = $"This wiki indexes a {context.ProjectType.ToString().ToLowerInvariant()} project with {context.Entities.Count} extracted entities and {context.Relations.Count} extracted relations.",
+                    ["SUMMARY"] = $"This wiki indexes a {GetProjectTypeName(context.ProjectType)} project with {context.Entities.Count} extracted entities and {context.Relations.Count} extracted relations.",
                     ["ARCHITECTURE"] = CreateArchitectureSummary(context),
                     ["RELATIONS"] = $"The knowledge graph currently contains {context.Relations.Count} structural relations. Navigation between documents is added in Milestone 3.",
                 },
@@ -39,4 +39,11 @@ public sealed class InitialDocumentPlanner : IDocumentPlanner
 
         return string.Join(Environment.NewLine, groups);
     }
+
+    private static string GetProjectTypeName(ProjectWiki.Core.Config.ProjectType projectType) => projectType switch
+    {
+        ProjectWiki.Core.Config.ProjectType.DotNet => ".NET",
+        ProjectWiki.Core.Config.ProjectType.Unity => "Unity",
+        _ => "generic",
+    };
 }
