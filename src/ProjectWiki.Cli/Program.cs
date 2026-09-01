@@ -87,11 +87,12 @@ static Dictionary<string, string> ParseOptions(string[] rest)
 static void PrintUsage()
 {
     Console.WriteLine("""
-        project-wiki - reusable project wiki engine (Milestone 1: init only)
+        project-wiki - reusable project wiki engine (Milestone 2: initial documents)
 
         Usage:
           project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]
 
+        The init command also generates deterministic initial architecture documentation.
         Not yet implemented (planned milestones): update, inspect, validate, rebuild, serve.
         """);
 }

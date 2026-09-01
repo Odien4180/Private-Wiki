@@ -62,6 +62,9 @@ public class WikiEngineTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_wikiRoot, "tracking", "git.json")));
         Assert.True(Directory.Exists(Path.Combine(_wikiRoot, "documents", "systems")));
         Assert.True(Directory.Exists(Path.Combine(_wikiRoot, "site")));
+        var architectureDocument = Path.Combine(_wikiRoot, "documents", "architecture", "overview.md");
+        Assert.True(File.Exists(architectureDocument));
+        Assert.Contains("2 extracted entities", File.ReadAllText(architectureDocument));
 
         var entitiesJson = File.ReadAllText(Path.Combine(_wikiRoot, "knowledge", "entities.json"));
         using var doc = JsonDocument.Parse(entitiesJson);

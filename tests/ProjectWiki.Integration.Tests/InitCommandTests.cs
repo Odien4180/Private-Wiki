@@ -56,6 +56,9 @@ public class InitCommandTests : IDisposable
         var configJson = File.ReadAllText(Path.Combine(_wikiRoot, "wiki.config.json"));
         using var configDoc = JsonDocument.Parse(configJson);
         Assert.Equal("Sample Game Wiki", configDoc.RootElement.GetProperty("wiki").GetProperty("title").GetString());
+
+        var architectureDocument = File.ReadAllText(Path.Combine(_wikiRoot, "documents", "architecture", "overview.md"));
+        Assert.Contains("3 extracted entities", architectureDocument);
     }
 
     [Fact]

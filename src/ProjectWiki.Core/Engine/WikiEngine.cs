@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ProjectWiki.Core.Analysis;
 using ProjectWiki.Core.Config;
+using ProjectWiki.Core.Documents;
 using ProjectWiki.Core.Model;
 using ProjectWiki.Core.Persistence;
 using ProjectWiki.Core.Scanning;
@@ -80,6 +81,7 @@ public sealed class WikiEngine
         WriteKnowledge(wikiRoot, analysis);
         WriteTracking(wikiRoot, scannedFiles, gitInfo);
         CreateWikiSkeleton(wikiRoot);
+        WriteInitialDocuments(wikiRoot, options, projectType, analysis);
 
         return new WikiInitResult
         {
@@ -176,6 +178,28 @@ public sealed class WikiEngine
         foreach (var relative in directories)
         {
             Directory.CreateDirectory(Path.Combine(wikiRoot, relative));
+        }
+
+        private static void WriteInitialDocuments(
+            string wikiRoot,
+            WikiInitOptions options,
+            ProjectType projectType,
+            AnalysisResult analysis)
+        {
+            var plans = new InitialDocumentPlanner().Plan(new DocumentPlanningContext
+            {
+                WikiTitle = options.Title ?? new DirectoryInfo(Path.GetFullPath(options.ProjectRoot)).Name,
+                ProjectType = projectType,
+                Entities = analysis.Entities,
+                Relations = analysis.Relations,
+            });
+
+            var store = new MarkdownDocumentStore();
+            var documentsRoot = Path.Combine(wikiRoot, "documents");
+            foreach (var plan in plans)
+            {
+                store.Write(documentsRoot, plan);
+            }
         }
     }
 
