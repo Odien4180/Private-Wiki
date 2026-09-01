@@ -473,9 +473,10 @@ public sealed class WikiEngine
             IncludePatterns = config.Include,
             UseGit = config.Analysis.Git,
         });
-        new ProjectScopeAnalyzer().WriteReport(
+        var scopeAnalyzer = new ProjectScopeAnalyzer();
+        scopeAnalyzer.WriteReport(
             wikiRoot,
-            new ProjectScopeAnalyzer().Analyze(projectRoot, config.Project.Type, config.Exclude, config.Include));
+            scopeAnalyzer.Analyze(projectRoot, config.Project.Type, config.Exclude, config.Include));
         var previousHashes = LoadHashes(wikiRoot);
         var changes = ChangeDetector.Detect(previousHashes, currentFiles);
         var previousEntities = new NavigationStore().Load(wikiRoot).Entities.Entities;

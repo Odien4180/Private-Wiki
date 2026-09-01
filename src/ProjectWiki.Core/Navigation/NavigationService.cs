@@ -179,22 +179,17 @@ public sealed class NavigationService
                 .ToList()
             : new List<DocumentContent>();
         var issues = new List<NavigationValidationIssue>();
-        if (!requireDocuments)
-        {
-            return issues;
-        }
-
-        if (!docs.Any(doc => doc.Path.StartsWith("systems/", StringComparison.OrdinalIgnoreCase)))
+        if (requireDocuments && !docs.Any(doc => doc.Path.StartsWith("systems/", StringComparison.OrdinalIgnoreCase)))
         {
             AddIssue(issues, "no_system_documents", "At least one system document is required.");
         }
 
-        if (!docs.Any(doc => doc.Path.StartsWith("features/", StringComparison.OrdinalIgnoreCase)))
+        if (requireDocuments && !docs.Any(doc => doc.Path.StartsWith("features/", StringComparison.OrdinalIgnoreCase)))
         {
             AddIssue(issues, "no_feature_documents", "At least one feature document is required.");
         }
 
-        if (!docs.Any(doc => doc.Path.StartsWith("architecture/", StringComparison.OrdinalIgnoreCase) && HasAgentOrManualProse(doc.Content)))
+        if (requireDocuments && !docs.Any(doc => doc.Path.StartsWith("architecture/", StringComparison.OrdinalIgnoreCase) && HasAgentOrManualProse(doc.Content)))
         {
             AddIssue(issues, "no_architecture_prose", "Architecture documents must contain agent-authored or manual explanatory prose.");
         }
