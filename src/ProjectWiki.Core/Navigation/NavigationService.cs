@@ -493,7 +493,7 @@ public sealed class NavigationService
                 yield break;
             }
 
-            var name = content[(start + startPrefix.Length)..startEnd].Replace(":START", string.Empty, StringComparison.Ordinal);
+            var name = content[(start + startPrefix.Length)..startEnd].Replace(":START", string.Empty, StringComparison.Ordinal).Trim();
             var endMarker = $"<!-- AGENT:{name}:END -->";
             var end = content.IndexOf(endMarker, startEnd + 3, StringComparison.Ordinal);
             if (end < 0)
@@ -527,7 +527,7 @@ public sealed class NavigationService
                     break;
                 }
 
-                var name = result[(start + startPrefix.Length)..startEnd].Replace(":START", string.Empty, StringComparison.Ordinal);
+                var name = result[(start + startPrefix.Length)..startEnd].Replace(":START", string.Empty, StringComparison.Ordinal).Trim();
                 var endMarker = $"<!-- {prefix}:{name}:END -->";
                 var end = result.IndexOf(endMarker, startEnd + 3, StringComparison.Ordinal);
                 if (end < 0)
