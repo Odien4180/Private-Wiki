@@ -26,16 +26,17 @@ dotnet test
 | `project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]` | Implemented (Milestone 1: deterministic core only) |
 | `project-wiki update --wiki <path>` | Planned (Milestone 4) |
 | `project-wiki inspect <entity> --wiki <path>` | Planned |
-| `project-wiki validate --wiki <path>` | Planned (Milestone 3/4) |
+| `project-wiki validate --wiki <path>` | CLI wiring planned; the Milestone 3 engine API is implemented |
 | `project-wiki build --wiki <path>` | Planned (Milestone 6) |
 | `project-wiki serve --wiki <path>` | Planned (Milestone 6) |
 
 `init` scans the project, runs the C# static analyzer, builds the initial
-knowledge graph (entities + relations with evidence), and persists it
-under `wiki_root` (`wiki.config.json`, `knowledge/`, `tracking/`, plus an
-empty `documents/`, `reports/`, `site/` skeleton for later milestones). It
-does not generate any Markdown documents, cross-links, captions, or a
-website yet.
+knowledge graph (entities + relations with evidence), persists it under
+`wiki_root`, and generates the initial architecture document. It initializes
+typed aliases and redirects and atomically writes an empty backlink index.
+The public `WikiEngine.BuildNavigation` and
+`WikiEngine.ValidateNavigation` methods provide the Milestone 3 deterministic
+navigation core; corresponding CLI commands are not wired yet.
 
 Example:
 

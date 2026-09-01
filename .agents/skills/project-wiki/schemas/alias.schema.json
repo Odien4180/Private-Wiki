@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://project-wiki/schemas/alias.schema.json",
+  "title": "Alias index",
+  "type": "object",
+  "required": ["aliases"],
+  "properties": {
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["alias", "targets"],
+        "properties": {
+          "alias": { "type": "string" },
+          "targets": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

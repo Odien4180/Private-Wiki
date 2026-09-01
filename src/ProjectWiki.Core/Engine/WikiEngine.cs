@@ -1,8 +1,8 @@
-using System.Text.Json;
 using ProjectWiki.Core.Analysis;
 using ProjectWiki.Core.Config;
 using ProjectWiki.Core.Documents;
 using ProjectWiki.Core.Model;
+using ProjectWiki.Core.Navigation;
 using ProjectWiki.Core.Persistence;
 using ProjectWiki.Core.Scanning;
 
@@ -43,8 +43,9 @@ public sealed class WikiInitResult
 /// detect project type, scan files, run static analysis, build the
 /// knowledge graph, and persist it under <c>wiki_root</c>.
 ///
-/// This is Milestone 1 scope only: no document generation, cross-linking,
-/// captions, Unity parsing, or incremental update.
+/// This includes initial documents and the deterministic Milestone 3
+/// navigation index. Captions, Unity parsing, incremental update, and CLI
+/// commands beyond <c>init</c> remain outside this workflow.
 /// </summary>
 public sealed class WikiEngine
 {
@@ -56,6 +57,11 @@ public sealed class WikiEngine
         if (!Directory.Exists(projectRoot))
         {
             throw new DirectoryNotFoundException($"Project root does not exist: {projectRoot}");
+        }
+
+        if (IsWithin(projectRoot, wikiRoot))
+        {
+            throw new ArgumentException("Wiki root must not be inside the project root.");
         }
 
         Directory.CreateDirectory(wikiRoot);
@@ -82,6 +88,7 @@ public sealed class WikiEngine
         WriteTracking(wikiRoot, scannedFiles, gitInfo);
         CreateWikiSkeleton(wikiRoot);
         WriteInitialDocuments(wikiRoot, options, projectType, analysis);
+        BuildNavigation(new WikiNavigationOptions { WikiRoot = wikiRoot });
 
         return new WikiInitResult
         {
@@ -108,7 +115,7 @@ public sealed class WikiEngine
             Exclude = options.AdditionalExclusions.ToList(),
         };
 
-        WriteJson(Path.Combine(wikiRoot, "wiki.config.json"), config);
+        AtomicFile.WriteJson(Path.Combine(wikiRoot, "wiki.config.json"), config);
     }
 
     private static void WriteKnowledge(string wikiRoot, AnalysisResult analysis)
@@ -116,11 +123,10 @@ public sealed class WikiEngine
         var knowledgeDir = Path.Combine(wikiRoot, "knowledge");
         Directory.CreateDirectory(knowledgeDir);
 
-        WriteJson(Path.Combine(knowledgeDir, "entities.json"), new { entities = analysis.Entities });
-        WriteJson(Path.Combine(knowledgeDir, "relations.json"), new { relations = analysis.Relations });
-        WriteJson(Path.Combine(knowledgeDir, "aliases.json"), new Dictionary<string, List<string>>());
-        WriteJson(Path.Combine(knowledgeDir, "redirects.json"), new Dictionary<string, string>());
-        WriteJson(Path.Combine(knowledgeDir, "captions.json"), new { captions = Array.Empty<object>() });
+        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "entities.json"), new { entities = analysis.Entities.OrderBy(e => e.Id, StringComparer.Ordinal) });
+        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "relations.json"), new { relations = analysis.Relations.OrderBy(r => r.Source, StringComparer.Ordinal).ThenBy(r => r.Target, StringComparer.Ordinal).ThenBy(r => r.Type) });
+        new NavigationStore().Initialize(wikiRoot, analysis.Entities);
+        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "captions.json"), new { captions = Array.Empty<object>() });
     }
 
     private static void WriteTracking(string wikiRoot, IReadOnlyList<ScannedFile> scannedFiles, GitInfo? gitInfo)
@@ -139,7 +145,7 @@ public sealed class WikiEngine
                 Category = f.Category.ToString().ToLowerInvariant(),
             }).ToList(),
         };
-        WriteJson(Path.Combine(trackingDir, "files.json"), files);
+        AtomicFile.WriteJson(Path.Combine(trackingDir, "files.json"), files);
 
         var hashes = new HashesTracking();
         foreach (var f in scannedFiles)
@@ -147,7 +153,8 @@ public sealed class WikiEngine
             hashes.Hashes[f.Path] = f.Hash;
         }
 
-        WriteJson(Path.Combine(trackingDir, "hashes.json"), hashes);
+        hashes.Hashes = hashes.Hashes.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        AtomicFile.WriteJson(Path.Combine(trackingDir, "hashes.json"), hashes);
 
         var git = new GitTracking
         {
@@ -155,9 +162,9 @@ public sealed class WikiEngine
             LastIndexedCommit = gitInfo?.HeadCommit,
             Statuses = gitInfo is null ? new Dictionary<string, string>() : new Dictionary<string, string>(gitInfo.FileStatuses),
         };
-        WriteJson(Path.Combine(trackingDir, "git.json"), git);
+        AtomicFile.WriteJson(Path.Combine(trackingDir, "git.json"), git);
 
-        WriteJson(Path.Combine(trackingDir, "updates.json"), new { updates = Array.Empty<object>() });
+        AtomicFile.WriteJson(Path.Combine(trackingDir, "updates.json"), new { updates = Array.Empty<object>() });
     }
 
     private static void CreateWikiSkeleton(string wikiRoot)
@@ -203,8 +210,41 @@ public sealed class WikiEngine
         }
     }
 
-    private static void WriteJson<T>(string path, T value)
+    /// <summary>
+    /// Rebuilds the deterministic backlink index from the Markdown documents
+    /// already stored in a wiki. Alias and redirect definitions are preserved.
+    /// </summary>
+    public WikiNavigationResult BuildNavigation(WikiNavigationOptions options)
     {
-        File.WriteAllText(path, JsonSerializer.Serialize(value, JsonOptions.Default));
+        var wikiRoot = ValidateWikiRoot(options);
+        return new NavigationService().Build(wikiRoot);
+    }
+
+    /// <summary>
+    /// Validates persisted aliases, redirects, Markdown wiki links, and the
+    /// backlink index without changing the wiki.
+    /// </summary>
+    public NavigationValidationResult ValidateNavigation(WikiNavigationOptions options)
+    {
+        var wikiRoot = ValidateWikiRoot(options);
+        return new NavigationService().Validate(wikiRoot);
+    }
+
+    private static string ValidateWikiRoot(WikiNavigationOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = Path.GetFullPath(options.WikiRoot);
+        if (!Directory.Exists(wikiRoot))
+        {
+            throw new DirectoryNotFoundException($"Wiki root does not exist: {wikiRoot}");
+        }
+
+        return wikiRoot;
+    }
+
+    private static bool IsWithin(string parent, string child)
+    {
+        var relative = Path.GetRelativePath(parent, child);
+        return relative == "." || (!Path.IsPathRooted(relative) && !relative.StartsWith("..", StringComparison.Ordinal));
     }
 }

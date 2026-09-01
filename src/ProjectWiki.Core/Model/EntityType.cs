@@ -11,6 +11,8 @@ public enum EntityType
     System,
     Feature,
     Class,
+    Struct,
+    Enum,
     Interface,
     Service,
     Manager,

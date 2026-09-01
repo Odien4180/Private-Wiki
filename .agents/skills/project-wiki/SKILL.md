@@ -32,9 +32,10 @@ Required:
 - rebuild
 - serve
 
-> Implementation status: `init` (Milestone 1, deterministic core only) is
-> implemented. `update`, `inspect`, `validate`, `rebuild` and `serve` are
-> planned for later milestones (see `docs/` for the milestone breakdown).
+> Implementation status: `init` and the Milestone 3 deterministic navigation
+> engine API are implemented. CLI commands for `update`, `inspect`,
+> `validate`, `rebuild`, and `serve` remain planned (see `docs/` for the
+> milestone breakdown).
 
 ## Workflow
 

@@ -1,4 +1,5 @@
 using System.Text;
+using ProjectWiki.Core.Persistence;
 
 namespace ProjectWiki.Core.Documents;
 
@@ -21,7 +22,7 @@ public sealed class MarkdownDocumentStore
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, content);
+        AtomicFile.WriteText(path, content);
     }
 
     private static string CreateDocument(string title, DocumentTemplate template)

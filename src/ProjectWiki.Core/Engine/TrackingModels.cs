@@ -20,7 +20,7 @@ public sealed class FilesTracking
 
 public sealed class HashesTracking
 {
-    public Dictionary<string, string> Hashes { get; init; } = new();
+    public Dictionary<string, string> Hashes { get; set; } = new();
 }
 
 public sealed class GitTracking

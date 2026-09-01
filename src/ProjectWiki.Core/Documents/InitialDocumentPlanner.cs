@@ -19,7 +19,7 @@ public sealed class InitialDocumentPlanner : IDocumentPlanner
                 {
                     ["SUMMARY"] = $"This wiki indexes a {GetProjectTypeName(context.ProjectType)} project with {context.Entities.Count} extracted entities and {context.Relations.Count} extracted relations.",
                     ["ARCHITECTURE"] = CreateArchitectureSummary(context),
-                    ["RELATIONS"] = $"The knowledge graph currently contains {context.Relations.Count} structural relations. Navigation between documents is added in Milestone 3.",
+                    ["RELATIONS"] = $"The knowledge graph currently contains {context.Relations.Count} structural relations. Markdown navigation and backlinks are indexed deterministically.",
                 },
             },
         ];

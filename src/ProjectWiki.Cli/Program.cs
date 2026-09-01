@@ -87,7 +87,7 @@ static Dictionary<string, string> ParseOptions(string[] rest)
 static void PrintUsage()
 {
     Console.WriteLine("""
-        project-wiki - reusable project wiki engine (Milestone 2: initial documents)
+        project-wiki - reusable project wiki engine (Milestone 3: navigation core)
 
         Usage:
           project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]
