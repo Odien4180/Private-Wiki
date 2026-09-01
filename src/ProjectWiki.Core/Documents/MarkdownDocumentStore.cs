@@ -20,7 +20,7 @@ public sealed class MarkdownDocumentStore
 
     private static string CreateDocument(string title, DocumentTemplate template)
     {
-        var sections = template switch
+        string[] sections = template switch
         {
             DocumentTemplate.System => ["SUMMARY", "ARCHITECTURE", "FLOW", "RELATIONS"],
             DocumentTemplate.Feature => ["SUMMARY", "FLOW", "RELATIONS"],
@@ -50,11 +50,10 @@ public sealed class MarkdownDocumentStore
         }
 
         var contentStart = start + startMarker.Length;
-        return string.Concat(
-            content.AsSpan(0, contentStart),
-            Environment.NewLine,
-            value.Trim(),
-            Environment.NewLine,
-            content.AsSpan(end));
+        return content[..contentStart]
+            + Environment.NewLine
+            + value.Trim()
+            + Environment.NewLine
+            + content[end..];
     }
 }

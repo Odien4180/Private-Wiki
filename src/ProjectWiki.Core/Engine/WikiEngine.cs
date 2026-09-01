@@ -179,27 +179,27 @@ public sealed class WikiEngine
         {
             Directory.CreateDirectory(Path.Combine(wikiRoot, relative));
         }
+    }
 
-        private static void WriteInitialDocuments(
-            string wikiRoot,
-            WikiInitOptions options,
-            ProjectType projectType,
-            AnalysisResult analysis)
+    private static void WriteInitialDocuments(
+        string wikiRoot,
+        WikiInitOptions options,
+        ProjectType projectType,
+        AnalysisResult analysis)
+    {
+        var plans = new InitialDocumentPlanner().Plan(new DocumentPlanningContext
         {
-            var plans = new InitialDocumentPlanner().Plan(new DocumentPlanningContext
-            {
-                WikiTitle = options.Title ?? new DirectoryInfo(Path.GetFullPath(options.ProjectRoot)).Name,
-                ProjectType = projectType,
-                Entities = analysis.Entities,
-                Relations = analysis.Relations,
-            });
+            WikiTitle = options.Title ?? new DirectoryInfo(Path.GetFullPath(options.ProjectRoot)).Name,
+            ProjectType = projectType,
+            Entities = analysis.Entities,
+            Relations = analysis.Relations,
+        });
 
-            var store = new MarkdownDocumentStore();
-            var documentsRoot = Path.Combine(wikiRoot, "documents");
-            foreach (var plan in plans)
-            {
-                store.Write(documentsRoot, plan);
-            }
+        var store = new MarkdownDocumentStore();
+        var documentsRoot = Path.Combine(wikiRoot, "documents");
+        foreach (var plan in plans)
+        {
+            store.Write(documentsRoot, plan);
         }
     }
 
