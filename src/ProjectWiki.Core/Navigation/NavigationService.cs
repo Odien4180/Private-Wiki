@@ -1,9 +1,16 @@
 using ProjectWiki.Core.Persistence;
+using ProjectWiki.Core.Scanning;
 
 namespace ProjectWiki.Core.Navigation;
 
 public sealed class NavigationService
 {
+    private static readonly string[] ManualSectionPlaceholderPrefixes =
+    [
+        "Developer Notes",
+        "사용자가 직접 작성",
+    ];
+
     public WikiNavigationResult Build(string wikiRoot)
     {
         var store = new NavigationStore();
@@ -18,13 +25,28 @@ public sealed class NavigationService
         return CreateResult(documents.DocumentCount, links, resolver, backlinks, validation);
     }
 
-    public NavigationValidationResult Validate(string wikiRoot)
+    public NavigationValidationResult Validate(string wikiRoot) => Validate(wikiRoot, requireDocuments: false, minCoverage: 0);
+
+    public NavigationValidationResult Validate(string wikiRoot, bool requireDocuments, double minCoverage)
     {
         var data = new NavigationStore().Load(wikiRoot);
-        var links = ReadDocuments(wikiRoot).Links;
+        var documents = ReadDocuments(wikiRoot);
+        var links = documents.Links;
         var resolver = new NavigationResolver(data);
         var expectedBacklinks = BuildBacklinks(links, resolver);
-        return Validate(data, links, resolver, expectedBacklinks, validatePersistedBacklinks: true);
+        var structure = Validate(data, links, resolver, expectedBacklinks, validatePersistedBacklinks: true);
+        if (!requireDocuments && minCoverage <= 0)
+        {
+            return structure;
+        }
+
+        var qualityIssues = ValidateQuality(wikiRoot, data, resolver, requireDocuments, minCoverage);
+        return new NavigationValidationResult
+        {
+            Issues = structure.Issues,
+            StructureIssues = structure.Issues,
+            QualityIssues = qualityIssues,
+        };
     }
 
     private static WikiNavigationResult CreateResult(
@@ -139,7 +161,145 @@ public sealed class NavigationService
                 .ThenBy(issue => issue.Column)
                 .ThenBy(issue => issue.Message, StringComparer.Ordinal)
                 .ToList(),
+            StructureIssues = issues
+                .OrderBy(issue => issue.Code, StringComparer.Ordinal)
+                .ThenBy(issue => issue.DocumentPath, StringComparer.Ordinal)
+                .ThenBy(issue => issue.Line)
+                .ThenBy(issue => issue.Column)
+                .ThenBy(issue => issue.Message, StringComparer.Ordinal)
+                .ToList(),
         };
+    }
+
+    private static List<NavigationValidationIssue> ValidateQuality(
+        string wikiRoot,
+        NavigationData data,
+        NavigationResolver resolver,
+        bool requireDocuments,
+        double minCoverage)
+    {
+        var documentsRoot = Path.Combine(Path.GetFullPath(wikiRoot), "documents");
+        var docs = Directory.Exists(documentsRoot)
+            ? Directory.EnumerateFiles(documentsRoot, "*.md", SearchOption.AllDirectories)
+                .Select(path => new DocumentContent(ToDocumentPath(documentsRoot, path), File.ReadAllText(path)))
+                .OrderBy(doc => doc.Path, StringComparer.Ordinal)
+                .ToList()
+            : new List<DocumentContent>();
+        var issues = new List<NavigationValidationIssue>();
+        if (requireDocuments && !docs.Any(doc => doc.Path.StartsWith("systems/", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddIssue(issues, "no_system_documents", "At least one system document is required.");
+        }
+
+        if (requireDocuments && !docs.Any(doc => doc.Path.StartsWith("features/", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddIssue(issues, "no_feature_documents", "At least one feature document is required.");
+        }
+
+        if (requireDocuments && !docs.Any(doc => doc.Path.StartsWith("architecture/", StringComparison.OrdinalIgnoreCase) && HasAgentOrManualProse(doc.Content)))
+        {
+            AddIssue(issues, "no_architecture_prose", "Architecture documents must contain agent-authored or manual explanatory prose.");
+        }
+
+        foreach (var doc in docs)
+        {
+            foreach (var block in ExtractAgentBlocks(doc.Content))
+            {
+                if (string.IsNullOrWhiteSpace(block))
+                {
+                    issues.Add(new NavigationValidationIssue
+                    {
+                        Code = "empty_agent_block",
+                        Severity = NavigationIssueSeverity.Error,
+                        Message = "AGENT blocks must contain source-grounded prose or be omitted.",
+                        DocumentPath = doc.Path,
+                    });
+                }
+            }
+
+            if (IsQualityDocument(doc.Path) && HasAgentBlock(doc.Content) && !ContainsSourceEvidence(doc.Content))
+            {
+                issues.Add(new NavigationValidationIssue
+                {
+                    Code = "missing_source_evidence",
+                    Severity = NavigationIssueSeverity.Error,
+                    Message = "Agent-authored documents must cite real source paths or evidence.",
+                    DocumentPath = doc.Path,
+                });
+            }
+
+            foreach (var link in WikiLinkParser.Parse(doc.Path, doc.Content)
+                         .Where(link => HasAgentBlock(doc.Content)
+                             && !link.IsMalformed
+                             && resolver.Resolve(link.Target).Status == NavigationResolutionStatus.Broken))
+            {
+                issues.Add(new NavigationValidationIssue
+                {
+                    Code = "stale_agent_document",
+                    Severity = NavigationIssueSeverity.Error,
+                    Message = $"Document references deleted or unknown entity '{link.Target}'.",
+                    DocumentPath = doc.Path,
+                    Line = link.Line,
+                    Column = link.Column,
+                });
+            }
+        }
+
+        var firstPartyEntities = data.Entities.Entities
+            .Where(entity => CodeOwnershipClassifier.Classify(entity) == "first_party" && entity.Sources.Count > 0)
+            .ToList();
+        var documentedEntityIds = BuildDocumentedEntityIds(data.Entities.Entities, docs);
+        var relationCounts = data.Entities.Entities
+            .ToDictionary(entity => entity.Id, _ => 0, StringComparer.OrdinalIgnoreCase);
+        var relationsPath = Path.Combine(wikiRoot, "knowledge", "relations.json");
+        if (File.Exists(relationsPath))
+        {
+            foreach (var relation in AtomicFile.ReadJson<ProjectWiki.Core.Engine.RelationCatalog>(relationsPath).Relations)
+            {
+                if (relationCounts.ContainsKey(relation.Source))
+                {
+                    relationCounts[relation.Source]++;
+                }
+
+                if (relationCounts.ContainsKey(relation.Target))
+                {
+                    relationCounts[relation.Target]++;
+                }
+            }
+        }
+
+        var importantFirstPartyEntities = firstPartyEntities
+            .Where(entity => IsImportantEntity(entity, relationCounts.GetValueOrDefault(entity.Id)))
+            .ToList();
+        if (importantFirstPartyEntities.Count > 0 && minCoverage > 0)
+        {
+            var documented = importantFirstPartyEntities.Count(entity => documentedEntityIds.Contains(entity.Id));
+            var coverage = documented / (double)importantFirstPartyEntities.Count;
+            if (coverage < minCoverage)
+            {
+                AddIssue(issues, "first_party_coverage_too_low", $"Important first-party documentation coverage {coverage:0.##} is below required {minCoverage:0.##}.");
+            }
+        }
+
+        foreach (var entity in importantFirstPartyEntities.Where(entity => !documentedEntityIds.Contains(entity.Id)))
+        {
+            AddIssue(issues, "undocumented_important_entity", $"Important entity '{entity.Id}' has graph references but no document coverage.");
+        }
+
+        var thirdPartyMentions = data.Entities.Entities
+            .Where(entity => CodeOwnershipClassifier.Classify(entity) == "third_party")
+            .Count(entity => documentedEntityIds.Contains(entity.Id));
+        var firstPartyMentions = firstPartyEntities.Count(entity => documentedEntityIds.Contains(entity.Id));
+        if (thirdPartyMentions > 0 && firstPartyMentions > 0 && thirdPartyMentions > firstPartyMentions)
+        {
+            AddIssue(issues, "third_party_noise_too_high", "Third-party documented entity mentions exceed first-party mentions.");
+        }
+
+        return issues
+            .OrderBy(issue => issue.Code, StringComparer.Ordinal)
+            .ThenBy(issue => issue.DocumentPath, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Line)
+            .ToList();
     }
 
     private static void ValidateEntities(NavigationData data, List<NavigationValidationIssue> issues)
@@ -305,6 +465,132 @@ public sealed class NavigationService
         return references;
     }
 
+    private static bool HasAgentOrManualProse(string content)
+    {
+        if (ExtractAgentBlocks(content).Any(block => !string.IsNullOrWhiteSpace(block)))
+        {
+            return true;
+        }
+
+        var manual = RemoveMarkedBlocks(content)
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0
+                && !line.StartsWith('#')
+                && !ManualSectionPlaceholderPrefixes.Any(prefix => line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
+        return manual.Any();
+    }
+
+    private static bool HasAgentBlock(string content) =>
+        content.Contains("<!-- AGENT:", StringComparison.Ordinal);
+
+    private static IEnumerable<string> ExtractAgentBlocks(string content)
+    {
+        const string startPrefix = "<!-- AGENT:";
+        var index = 0;
+        while (index < content.Length)
+        {
+            var start = content.IndexOf(startPrefix, index, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                yield break;
+            }
+
+            var startEnd = content.IndexOf("-->", start, StringComparison.Ordinal);
+            if (startEnd < 0)
+            {
+                yield break;
+            }
+
+            var name = content[(start + startPrefix.Length)..startEnd].Replace(":START", string.Empty, StringComparison.Ordinal).Trim();
+            var endMarker = $"<!-- AGENT:{name}:END -->";
+            var end = content.IndexOf(endMarker, startEnd + 3, StringComparison.Ordinal);
+            if (end < 0)
+            {
+                yield break;
+            }
+
+            yield return content[(startEnd + 3)..end].Trim();
+            index = end + endMarker.Length;
+        }
+    }
+
+    private static string RemoveMarkedBlocks(string content)
+    {
+        var result = content;
+        foreach (var prefix in new[] { "AUTO", "AGENT" })
+        {
+            var index = 0;
+            while (index < result.Length)
+            {
+                var startPrefix = $"<!-- {prefix}:";
+                var start = result.IndexOf(startPrefix, index, StringComparison.Ordinal);
+                if (start < 0)
+                {
+                    break;
+                }
+
+                var startEnd = result.IndexOf("-->", start, StringComparison.Ordinal);
+                if (startEnd < 0)
+                {
+                    break;
+                }
+
+                var name = result[(start + startPrefix.Length)..startEnd].Replace(":START", string.Empty, StringComparison.Ordinal).Trim();
+                var endMarker = $"<!-- {prefix}:{name}:END -->";
+                var end = result.IndexOf(endMarker, startEnd + 3, StringComparison.Ordinal);
+                if (end < 0)
+                {
+                    break;
+                }
+
+                result = result[..start] + result[(end + endMarker.Length)..];
+                index = start;
+            }
+        }
+
+        return result;
+    }
+
+    private static bool ContainsSourceEvidence(string content) =>
+        content.Contains(".cs", StringComparison.OrdinalIgnoreCase)
+        || content.Contains(".unity", StringComparison.OrdinalIgnoreCase)
+        || content.Contains(".prefab", StringComparison.OrdinalIgnoreCase)
+        || content.Contains(".asset", StringComparison.OrdinalIgnoreCase)
+        || content.Contains("Assets/", StringComparison.OrdinalIgnoreCase)
+        || content.Contains("Packages/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsQualityDocument(string path) =>
+        path.StartsWith("architecture/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("systems/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("features/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("classes/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("scenes/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("data/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("packages/", StringComparison.OrdinalIgnoreCase);
+
+    private static HashSet<string> BuildDocumentedEntityIds(
+        IEnumerable<ProjectWiki.Core.Model.Entity> entities,
+        IEnumerable<DocumentContent> documents)
+    {
+        var docs = documents.ToList();
+        return entities
+            .Where(entity => docs.Any(doc =>
+                doc.Content.Contains($"[[{entity.Id}", StringComparison.OrdinalIgnoreCase)
+                || doc.Content.Contains(entity.Title, StringComparison.OrdinalIgnoreCase)
+                || entity.Sources.Any(source => doc.Content.Contains(source, StringComparison.OrdinalIgnoreCase))))
+            .Select(entity => entity.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsImportantEntity(ProjectWiki.Core.Model.Entity entity, int relationCount) =>
+        relationCount >= 2
+        || entity.Type is ProjectWiki.Core.Model.EntityType.Scene
+            or ProjectWiki.Core.Model.EntityType.Prefab
+            or ProjectWiki.Core.Model.EntityType.Component
+            or ProjectWiki.Core.Model.EntityType.Service
+            or ProjectWiki.Core.Model.EntityType.Manager;
+
     private static void AddIssue(List<NavigationValidationIssue> issues, string code, string message, WikiLink? link = null) =>
         issues.Add(new NavigationValidationIssue
         {
@@ -327,6 +613,8 @@ public sealed class NavigationService
         int Line,
         int Column,
         string LinkTarget);
+
+    private readonly record struct DocumentContent(string Path, string Content);
 }
 
 internal sealed class NavigationResolver

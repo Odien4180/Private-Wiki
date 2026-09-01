@@ -129,6 +129,8 @@ public sealed class WikiInspectOptions
     public required string WikiRoot { get; init; }
 
     public required string Entity { get; init; }
+
+    public int Depth { get; init; } = 1;
 }
 
 public sealed class WikiInspectResult

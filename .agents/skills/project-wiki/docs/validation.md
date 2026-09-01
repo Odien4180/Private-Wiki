@@ -1,15 +1,21 @@
-# Validation (Milestone 3 Navigation Core)
+# Validation
 
-`WikiEngine.ValidateNavigation` performs read-only, deterministic validation
-of persisted navigation data and Markdown documents. It reports:
+`project-wiki validate --wiki <path>` performs deterministic structure validation for aliases, redirects, wiki links, and backlinks.
 
-- duplicate entity ids, aliases, and redirects;
-- empty aliases or redirects, aliases targeting missing entities, and redirects
-  that are broken, ambiguous, shadow an entity id, or cycle;
-- malformed, broken, and ambiguous `[[wiki links]]`;
-- a missing, stale, duplicated, or otherwise invalid backlink entry.
+Run `project-wiki build --wiki <path>` or `project-wiki navigation build --wiki <path>` before validation after editing Markdown, because validation checks the persisted backlink index.
 
-`WikiEngine.BuildNavigation` rebuilds `knowledge/backlinks.json` from the
-current Markdown documents using atomic replacement. It preserves existing
-aliases and redirects. `project-wiki validate --wiki <path>` exposes the
-validation result as JSON and returns nonzero when validation fails.
+`project-wiki validate --wiki <path> --require-documents --min-coverage 0.7` also performs document quality validation. Results distinguish `structureIssues` from `qualityIssues`.
+
+Quality issue codes include:
+
+- `no_system_documents`
+- `no_feature_documents`
+- `no_architecture_prose`
+- `empty_agent_block`
+- `undocumented_important_entity`
+- `first_party_coverage_too_low`
+- `third_party_noise_too_high`
+- `missing_source_evidence`
+- `stale_agent_document`
+
+A wiki with only `overview.md` must fail `--require-documents`. Passing validation requires meaningful architecture/system/feature prose, source evidence, linkable documents, regenerated backlinks, and acceptable important first-party coverage.

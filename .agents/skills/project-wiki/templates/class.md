@@ -5,6 +5,9 @@
 <!-- AUTO:SUMMARY:START -->
 <!-- AUTO:SUMMARY:END -->
 
+<!-- AGENT:EXPLANATION:START -->
+<!-- AGENT:EXPLANATION:END -->
+
 ## 관련 문서
 
 <!-- AUTO:RELATIONS:START -->

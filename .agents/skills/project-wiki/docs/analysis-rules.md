@@ -2,19 +2,9 @@
 
 ## Project Scanner
 
-The scanner walks `project_root` and collects, per file:
+The scanner walks `project_root` and collects path, extension, size, modification time, SHA-256 hash, git status when available, and file category.
 
-```text
-path
-extension
-size
-mtime
-hash (SHA-256)
-git status (if the project is a git repository)
-file category
-```
-
-Default exclusions (glob patterns, case-insensitive):
+Default exclusions are case-insensitive glob patterns:
 
 ```text
 .git/**
@@ -28,37 +18,27 @@ Build/**
 Builds/**
 ```
 
-Additional exclusions can be supplied via `wiki.config.json` `exclude`.
+Unity projects also use the Unity exclusion profile:
+
+```text
+Assets/AmplifyShaderEditor/**
+Assets/AmplifyShaderPack/**
+Assets/NiloToonURP/**
+Assets/Packages/**
+Assets/TextMesh Pro/**
+```
+
+`Assets/Plugins/**` is only a review candidate because project code may be mixed into that folder.
+
+Use `project-wiki scope --project <path>` before authoring to preview included files, excluded files, Unity third-party noise, and review candidates. Use `project-wiki init --exclude <glob>` and `--include <glob>` to refine scope. The effective scope is persisted to `reports/analysis-scope.json`.
 
 ## Static Analyzer (C#)
 
-C# source is analyzed with the Roslyn compiler APIs (
-`Microsoft.CodeAnalysis.CSharp`), **not** a regular-expression parser.
-Regex may only be used for cheap pre-filtering (e.g. "does this file
-contain `class`"), never as the source of truth for structure.
+C# source is analyzed with Roslyn compiler APIs, not regular expressions. Regex may only be used for cheap pre-filtering, never as the source of truth for structure.
 
-Minimum extraction, per file:
+Minimum extraction includes namespace, class, struct, interface, enum, method, property, field, inheritance, interface implementation, type references, and attributes.
 
-```text
-Namespace
-Class
-Struct
-Interface
-Enum
-Method
-Property
-Field
-Inheritance
-Interface implementation
-Type references
-Attributes
-```
-
-Each extracted symbol becomes (or contributes to) an Entity, and each
-structural relationship (inheritance, interface implementation, type
-reference) becomes a Relation with `confidence: high` and an `evidence`
-entry pointing at the originating file (and, when the position is known,
-line span).
+Each extracted symbol becomes or contributes to an Entity. Structural relationships become Relations with evidence pointing at a real source file and line span when known.
 
 ## Confidence
 
@@ -68,14 +48,8 @@ medium  - semantic agent inference
 low     - name-only inference
 ```
 
-Low-confidence relationships must never be presented as confirmed facts in
-generated documents.
+Low-confidence relationships must never be presented as confirmed facts.
 
-## Non-goals for the deterministic engine
+## Non-goals
 
-The engine never:
-
-- guesses semantic meaning of a system/feature (that is an Agent task),
-- invents source locations or line numbers it cannot compute,
-- infers a relationship from symbol names alone (that would be `low`
-  confidence surfaced explicitly, not silently upgraded).
+The deterministic engine never guesses semantic system/feature meaning, invents source locations, or silently upgrades name-only inference.

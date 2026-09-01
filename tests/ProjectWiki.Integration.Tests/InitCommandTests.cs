@@ -108,6 +108,95 @@ public class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public void ScopeListContextAndRequireDocuments_AreWiredThroughCli()
+    {
+        var (scopeCode, scopeOutput, scopeError) = CliRunner.Run("scope", "--project", _fixtureRoot);
+        Assert.True(scopeCode == 0, $"scope failed. stdout: {scopeOutput}\nstderr: {scopeError}");
+        using var scope = JsonDocument.Parse(scopeOutput);
+        Assert.True(scope.RootElement.GetProperty("includedFileCount").GetInt32() > 0);
+
+        var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot, "--include", "Combat/**");
+        Assert.Equal(0, init.ExitCode);
+
+        var (listCode, listOutput, listError) = CliRunner.Run("list", "--wiki", _wikiRoot, "--type", "class", "--source", "Combat/**");
+        Assert.True(listCode == 0, $"list failed. stdout: {listOutput}\nstderr: {listError}");
+        using var list = JsonDocument.Parse(listOutput);
+        Assert.True(list.RootElement.GetProperty("count").GetInt32() > 0);
+
+        var (contextCode, contextOutput, contextError) = CliRunner.Run("context", "--wiki", _wikiRoot, "--topic", "Combat");
+        Assert.True(contextCode == 0, $"context failed. stdout: {contextOutput}\nstderr: {contextError}");
+        using var context = JsonDocument.Parse(contextOutput);
+        Assert.True(context.RootElement.GetProperty("entities").GetArrayLength() > 0);
+
+        var (validateCode, validateOutput, _) = CliRunner.Run("validate", "--wiki", _wikiRoot, "--require-documents", "--min-coverage", "0.7");
+        Assert.NotEqual(0, validateCode);
+        using var validate = JsonDocument.Parse(validateOutput);
+        Assert.NotEmpty(validate.RootElement.GetProperty("qualityIssues").EnumerateArray());
+    }
+
+    [Fact]
+    public void AuthoredDocuments_BuildBacklinksValidateAndBuildSuccessfully()
+    {
+        var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);
+        Assert.Equal(0, init.ExitCode);
+
+        WriteDocument("architecture/overview.md", """
+            # Sample Architecture
+
+            <!-- AUTO:SUMMARY:START -->
+            Deterministic summary.
+            <!-- AUTO:SUMMARY:END -->
+
+            <!-- AGENT:EXPLANATION:START -->
+            The combat architecture centers on [[combat-manager]] coordinating damage flow from `Combat/CombatManager.cs:1`.
+            <!-- AGENT:EXPLANATION:END -->
+
+            ## Developer Notes
+            Keep this note.
+            """);
+        WriteDocument("systems/combat.md", """
+            # Combat System
+
+            <!-- AUTO:SUMMARY:START -->
+            System candidate.
+            <!-- AUTO:SUMMARY:END -->
+
+            <!-- AGENT:EXPLANATION:START -->
+            The combat system applies damage through [[idamageable]] implementations and [[hit-box]] collision entry points.
+            Source: `Combat/CombatManager.cs:1` and `Combat/HitBox.cs:1`.
+            <!-- AGENT:EXPLANATION:END -->
+
+            ## Developer Notes
+            """);
+        WriteDocument("features/damage.md", """
+            # Damage Feature
+
+            <!-- AUTO:SUMMARY:START -->
+            Feature candidate.
+            <!-- AUTO:SUMMARY:END -->
+
+            <!-- AGENT:EXPLANATION:START -->
+            Damage behavior connects [[combat-manager]] to [[idamageable]] so gameplay objects can receive combat effects.
+            Source: `Combat/IDamageable.cs:1`.
+            <!-- AGENT:EXPLANATION:END -->
+
+            ## Developer Notes
+            """);
+
+        var (navigationCode, navigationOutput, navigationError) = CliRunner.Run("navigation", "build", "--wiki", _wikiRoot);
+        Assert.True(navigationCode == 0, $"navigation build failed. stdout: {navigationOutput}\nstderr: {navigationError}");
+
+        var (validateCode, validateOutput, validateError) = CliRunner.Run("validate", "--wiki", _wikiRoot, "--require-documents", "--min-coverage", "0.7");
+        Assert.True(validateCode == 0, $"validate failed. stdout: {validateOutput}\nstderr: {validateError}");
+        using var validate = JsonDocument.Parse(validateOutput);
+        Assert.True(validate.RootElement.GetProperty("isValid").GetBoolean());
+
+        var (buildCode, buildOutput, buildError) = CliRunner.Run("build", "--wiki", _wikiRoot);
+        Assert.True(buildCode == 0, $"build failed. stdout: {buildOutput}\nstderr: {buildError}");
+        Assert.True(File.Exists(Path.Combine(_wikiRoot, "site", "systems", "combat.html")));
+    }
+
+    [Fact]
     public void Build_WritesStaticSiteAndServeRejectsAnInvalidPort()
     {
         var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);
@@ -140,5 +229,12 @@ public class InitCommandTests : IDisposable
         }
 
         throw new InvalidOperationException("Could not locate tests/fixtures/SampleCSharpProject.");
+    }
+
+    private void WriteDocument(string relativePath, string content)
+    {
+        var path = Path.Combine(_wikiRoot, "documents", relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
     }
 }

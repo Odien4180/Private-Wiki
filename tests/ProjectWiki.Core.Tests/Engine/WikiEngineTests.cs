@@ -78,6 +78,82 @@ public class WikiEngineTests : IDisposable
     }
 
     [Fact]
+    public void Init_AppliesUnityScopeProfileAndWritesScopeReportAndPlan()
+    {
+        WriteProjectFile("ProjectSettings/ProjectVersion.txt", "m_EditorVersion: 6000.0");
+        WriteProjectFile("Assets/Scripts/PlayerController.cs", "public class PlayerController { }");
+        WriteProjectFile("Assets/AmplifyShaderEditor/VendorTool.cs", "public class VendorTool { }");
+        WriteProjectFile("Assets/Plugins/ProjectPlugin.cs", "public class ProjectPlugin { }");
+
+        var result = new WikiEngine().Init(new WikiInitOptions
+        {
+            ProjectRoot = _projectRoot,
+            WikiRoot = _wikiRoot,
+        });
+
+        Assert.Equal(ProjectWiki.Core.Config.ProjectType.Unity, result.ProjectType);
+        Assert.Equal(2, result.EntityCount);
+        Assert.True(result.ExcludedFileCount > 0);
+        Assert.True(result.ScopeReviewCandidateCount > 0);
+
+        using var entitiesDoc = JsonDocument.Parse(File.ReadAllText(Path.Combine(_wikiRoot, "knowledge", "entities.json")));
+        var entityTitles = entitiesDoc.RootElement.GetProperty("entities").EnumerateArray()
+            .Select(entity => entity.GetProperty("title").GetString())
+            .ToList();
+        Assert.Contains("PlayerController", entityTitles);
+        Assert.Contains("ProjectPlugin", entityTitles);
+        Assert.DoesNotContain("VendorTool", entityTitles);
+
+        using var scopeDoc = JsonDocument.Parse(File.ReadAllText(Path.Combine(_wikiRoot, "reports", "analysis-scope.json")));
+        Assert.Contains("Assets/AmplifyShaderEditor/**", scopeDoc.RootElement.GetProperty("unityExclude").EnumerateArray().Select(item => item.GetString()));
+        Assert.Contains(scopeDoc.RootElement.GetProperty("candidateFiles").EnumerateArray(), file =>
+            file.GetProperty("path").GetString() == "Assets/Plugins/ProjectPlugin.cs");
+
+        using var planDoc = JsonDocument.Parse(File.ReadAllText(Path.Combine(_wikiRoot, "knowledge", "document-plan.json")));
+        Assert.True(planDoc.RootElement.GetProperty("architecture").GetArrayLength() > 0);
+        Assert.True(planDoc.RootElement.GetProperty("classes").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public void QueryApis_FilterEntitiesAndContextBySourceAndTopic()
+    {
+        WriteProjectFile("Assets/Scripts/PlayerController.cs", "public class PlayerController { }");
+        WriteProjectFile("Assets/UI/HudView.cs", "public class HudView { private PlayerController Player { get; set; } }");
+        var engine = new WikiEngine();
+        engine.Init(new WikiInitOptions { ProjectRoot = _projectRoot, WikiRoot = _wikiRoot });
+
+        var list = engine.List(new WikiListOptions { WikiRoot = _wikiRoot, Type = "class", Source = "Assets/Scripts/**" });
+        var context = engine.Context(new WikiContextOptions { WikiRoot = _wikiRoot, Topic = "Player", Depth = 2 });
+
+        var listed = Assert.Single(list.Entities);
+        Assert.Equal("PlayerController", listed.Title);
+        Assert.Contains(context.Entities, entity => entity.Title == "PlayerController");
+        Assert.All(context.Entities, entity => Assert.Equal("first_party", entity.CodeOwnership));
+    }
+
+    [Fact]
+    public void ValidateRequireDocuments_FailsWhenOnlyOverviewExists()
+    {
+        WriteProjectFile("Alpha.cs", "public class Alpha { }");
+        WriteProjectFile("Beta.cs", "public class Beta : Alpha { }");
+        WriteProjectFile("Gamma.cs", "public class Gamma : Alpha { }");
+        var engine = new WikiEngine();
+        engine.Init(new WikiInitOptions { ProjectRoot = _projectRoot, WikiRoot = _wikiRoot });
+
+        var validation = engine.ValidateNavigation(new ProjectWiki.Core.Navigation.WikiNavigationOptions
+        {
+            WikiRoot = _wikiRoot,
+            RequireDocuments = true,
+            MinCoverage = 0.7,
+        });
+
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.QualityIssues, issue => issue.Code == "no_system_documents");
+        Assert.Contains(validation.QualityIssues, issue => issue.Code == "no_feature_documents");
+        Assert.Contains(validation.QualityIssues, issue => issue.Code == "first_party_coverage_too_low");
+    }
+
+    [Fact]
     public void Init_ThrowsWhenProjectRootDoesNotExist()
     {
         var engine = new WikiEngine();

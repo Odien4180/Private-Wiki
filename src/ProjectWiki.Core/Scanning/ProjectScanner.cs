@@ -4,6 +4,8 @@ public sealed class ProjectScannerOptions
 {
     public IReadOnlyList<string> AdditionalExclusions { get; init; } = Array.Empty<string>();
 
+    public IReadOnlyList<string> IncludePatterns { get; init; } = Array.Empty<string>();
+
     public bool UseGit { get; init; } = true;
 }
 
@@ -28,7 +30,8 @@ public sealed class ProjectScanner
         {
             var relativePath = System.IO.Path.GetRelativePath(fullRoot, filePath).Replace('\\', '/');
 
-            if (GlobMatcher.IsMatchAny(relativePath, exclusions))
+            if (GlobMatcher.IsMatchAny(relativePath, exclusions)
+                || (options.IncludePatterns.Count > 0 && !GlobMatcher.IsMatchAny(relativePath, options.IncludePatterns)))
             {
                 continue;
             }

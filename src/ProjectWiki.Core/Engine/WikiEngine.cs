@@ -20,6 +20,8 @@ public sealed class WikiInitOptions
     public string Language { get; init; } = "ko";
 
     public IReadOnlyList<string> AdditionalExclusions { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> IncludePatterns { get; init; } = Array.Empty<string>();
 }
 
 public sealed class WikiInitResult
@@ -37,6 +39,10 @@ public sealed class WikiInitResult
     public required int RelationCount { get; init; }
 
     public required bool IsGitRepository { get; init; }
+
+    public required int ExcludedFileCount { get; init; }
+
+    public required int ScopeReviewCandidateCount { get; init; }
 }
 
 /// <summary>
@@ -69,10 +75,15 @@ public sealed class WikiEngine
 
         var projectType = ProjectTypeDetector.Detect(projectRoot);
 
+        var scopeAnalyzer = new ProjectScopeAnalyzer();
+        var scope = scopeAnalyzer.Analyze(projectRoot, projectType, options.AdditionalExclusions, options.IncludePatterns);
         var scanner = new ProjectScanner();
         var scannedFiles = scanner.Scan(projectRoot, new ProjectScannerOptions
         {
-            AdditionalExclusions = options.AdditionalExclusions,
+            AdditionalExclusions = options.AdditionalExclusions
+                .Concat(projectType == ProjectType.Unity ? UnityExclusionProfile.AutomaticExclusions : Array.Empty<string>())
+                .ToList(),
+            IncludePatterns = options.IncludePatterns,
         });
 
         var analysis = AnalyzeProject(projectRoot, scannedFiles, projectType);
@@ -80,6 +91,7 @@ public sealed class WikiEngine
         var gitInfo = GitRepositoryDetector.TryDetect(projectRoot);
 
         WriteConfig(wikiRoot, options, projectRoot, projectType);
+        scopeAnalyzer.WriteReport(wikiRoot, scope);
         WriteKnowledge(wikiRoot, analysis, initializeNavigation: true);
         WriteTracking(wikiRoot, scannedFiles, gitInfo, resetUpdates: true);
         CreateWikiSkeleton(wikiRoot);
@@ -95,6 +107,8 @@ public sealed class WikiEngine
             EntityCount = analysis.Entities.Count,
             RelationCount = analysis.Relations.Count,
             IsGitRepository = gitInfo is not null,
+            ExcludedFileCount = scope.ExcludedFileCount,
+            ScopeReviewCandidateCount = scope.CandidateFiles.Count,
         };
     }
 
@@ -109,6 +123,7 @@ public sealed class WikiEngine
                 Language = options.Language,
             },
             Exclude = options.AdditionalExclusions.ToList(),
+            Include = options.IncludePatterns.ToList(),
         };
 
         AtomicFile.WriteJson(Path.Combine(wikiRoot, "wiki.config.json"), config);
@@ -127,6 +142,7 @@ public sealed class WikiEngine
         {
             Relations = OrderRelations(analysis.Relations),
         });
+        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "document-plan.json"), CreateKnowledgeDocumentPlan(analysis));
 
         var navigationStore = new NavigationStore();
         if (initializeNavigation)
@@ -196,6 +212,7 @@ public sealed class WikiEngine
     {
         var directories = new[]
         {
+            "documents/project",
             "documents/architecture",
             "documents/systems",
             "documents/features",
@@ -263,7 +280,7 @@ public sealed class WikiEngine
     public NavigationValidationResult ValidateNavigation(WikiNavigationOptions options)
     {
         var wikiRoot = ValidateWikiRoot(options);
-        return new NavigationService().Validate(wikiRoot);
+        return new NavigationService().Validate(wikiRoot, options.RequireDocuments, options.MinCoverage);
     }
 
     /// <summary>
@@ -322,9 +339,13 @@ public sealed class WikiEngine
         }
 
         var entityId = resolution.EntityId!;
-        var relations = LoadRelations(wikiRoot)
+        var depth = Math.Max(1, options.Depth);
+        var relationCatalog = LoadRelations(wikiRoot);
+        var relatedIds = ExpandRelatedIds(entityId, relationCatalog, depth);
+        var relations = relationCatalog
             .Where(relation => string.Equals(relation.Source, entityId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(relation.Target, entityId, StringComparison.OrdinalIgnoreCase));
+                || string.Equals(relation.Target, entityId, StringComparison.OrdinalIgnoreCase)
+                || (depth > 1 && relatedIds.Contains(relation.Source) && relatedIds.Contains(relation.Target)));
         var backlinks = data.Backlinks.Backlinks
             .Where(backlink => string.Equals(backlink.Target, entityId, StringComparison.OrdinalIgnoreCase))
             .SelectMany(backlink => backlink.References)
@@ -346,6 +367,105 @@ public sealed class WikiEngine
         };
     }
 
+    public WikiListResult List(WikiListOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });
+        var data = new NavigationStore().Load(wikiRoot);
+        var entities = data.Entities.Entities.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(options.Type))
+        {
+            if (!Enum.TryParse<EntityType>(options.Type.Replace("-", string.Empty).Replace("_", string.Empty), ignoreCase: true, out var entityType))
+            {
+                throw new ArgumentException($"Unknown entity type: {options.Type}");
+            }
+
+            entities = entities.Where(entity => entity.Type == entityType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Source))
+        {
+            entities = entities.Where(entity => entity.Sources.Any(source => GlobMatcher.IsMatch(source, options.Source)));
+        }
+
+        var summaries = entities
+            .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+            .Select(CreateEntitySummary)
+            .ToList();
+        var offset = Math.Max(0, options.Offset);
+        var limit = NormalizeLimit(options.Limit, defaultLimit: 100);
+        var page = summaries.Skip(offset).Take(limit).ToList();
+        return new WikiListResult
+        {
+            TotalCount = summaries.Count,
+            Offset = offset,
+            Limit = limit,
+            Count = page.Count,
+            Entities = page,
+        };
+    }
+
+    public WikiContextResult Context(WikiContextOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });
+        var data = new NavigationStore().Load(wikiRoot);
+        var relations = LoadRelations(wikiRoot);
+        var seeds = data.Entities.Entities.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(options.Source))
+        {
+            seeds = seeds.Where(entity => entity.Sources.Any(source => GlobMatcher.IsMatch(source, options.Source)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Topic))
+        {
+            var topic = options.Topic.Trim();
+            seeds = seeds.Where(entity =>
+                Contains(entity.Id, topic)
+                || Contains(entity.Title, topic)
+                || Contains(entity.Namespace, topic)
+                || entity.Members.Any(member => Contains(member, topic))
+                || entity.Sources.Any(source => Contains(source, topic)));
+        }
+
+        var limit = NormalizeLimit(options.Limit, defaultLimit: 50);
+        var seedIds = seeds
+            .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+            .Take(limit)
+            .Select(entity => entity.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var depth = Math.Max(1, options.Depth);
+        foreach (var seed in seedIds.ToList())
+        {
+            seedIds.UnionWith(ExpandRelatedIds(seed, relations, depth));
+        }
+
+        var incoming = OrderRelations(relations.Where(relation => seedIds.Contains(relation.Target) && !seedIds.Contains(relation.Source)));
+        var outgoing = OrderRelations(relations.Where(relation => seedIds.Contains(relation.Source)));
+        var backlinks = data.Backlinks.Backlinks
+            .Where(backlink => seedIds.Contains(backlink.Target))
+            .SelectMany(backlink => backlink.References)
+            .OrderBy(reference => reference.DocumentPath, StringComparer.Ordinal)
+            .ThenBy(reference => reference.Line)
+            .ThenBy(reference => reference.Column)
+            .ToList();
+
+        return new WikiContextResult
+        {
+            Query = options.Topic ?? options.Source ?? string.Empty,
+            Entities = data.Entities.Entities
+                .Where(entity => seedIds.Contains(entity.Id))
+                .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+                .Take(limit)
+                .Select(CreateEntitySummary)
+                .ToList(),
+            IncomingRelations = incoming.Take(limit).ToList(),
+            OutgoingRelations = outgoing.Take(limit).ToList(),
+            Backlinks = backlinks.Take(limit).ToList(),
+        };
+    }
+
     private WikiUpdateResult Reindex(WikiUpdateOptions options, bool isRebuild)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -359,9 +479,16 @@ public sealed class WikiEngine
 
         var currentFiles = new ProjectScanner().Scan(projectRoot, new ProjectScannerOptions
         {
-            AdditionalExclusions = config.Exclude,
+            AdditionalExclusions = config.Exclude
+                .Concat(config.Project.Type == ProjectType.Unity ? UnityExclusionProfile.AutomaticExclusions : Array.Empty<string>())
+                .ToList(),
+            IncludePatterns = config.Include,
             UseGit = config.Analysis.Git,
         });
+        var scopeAnalyzer = new ProjectScopeAnalyzer();
+        scopeAnalyzer.WriteReport(
+            wikiRoot,
+            scopeAnalyzer.Analyze(projectRoot, config.Project.Type, config.Exclude, config.Include));
         var previousHashes = LoadHashes(wikiRoot);
         var changes = ChangeDetector.Detect(previousHashes, currentFiles);
         var previousEntities = new NavigationStore().Load(wikiRoot).Entities.Entities;
@@ -498,6 +625,183 @@ public sealed class WikiEngine
         || (relation.Type is RelationType.Inherits or RelationType.Implements
             && relation.Confidence == Confidence.High
             && relation.Evidence.Count > 0);
+
+    private static KnowledgeDocumentPlan CreateKnowledgeDocumentPlan(AnalysisResult analysis)
+    {
+        var relationsByEntity = analysis.Relations
+            .SelectMany(relation => new[] { relation.Source, relation.Target })
+            .GroupBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var firstPartyEntities = analysis.Entities
+            .Where(entity => CodeOwnershipClassifier.Classify(entity) == "first_party")
+            .ToList();
+
+        var plan = new KnowledgeDocumentPlan
+        {
+            Architecture =
+            [
+                new DocumentPlanCandidate
+                {
+                    Id = "architecture-overview",
+                    Title = "Architecture Overview",
+                    Reason = "Project-wide deterministic summary.",
+                    EntityIds = firstPartyEntities.Select(entity => entity.Id).Take(25).ToList(),
+                    Sources = firstPartyEntities.SelectMany(entity => entity.Sources).Distinct(StringComparer.Ordinal).Take(25).ToList(),
+                },
+            ],
+            Systems = CreateGroupCandidates(firstPartyEntities, entity => GetSystemGroup(entity), "system").Take(12).ToList(),
+            Features = CreateGroupCandidates(firstPartyEntities, entity => GetFeatureGroup(entity), "feature").Take(12).ToList(),
+            Classes = firstPartyEntities
+                .Where(entity => entity.Type is EntityType.Class or EntityType.Interface or EntityType.Struct or EntityType.Enum)
+                .OrderByDescending(entity => relationsByEntity.GetValueOrDefault(entity.Id))
+                .ThenBy(entity => entity.Id, StringComparer.Ordinal)
+                .Take(25)
+                .Select(entity => new DocumentPlanCandidate
+                {
+                    Id = entity.Id,
+                    Title = entity.Title,
+                    Reason = $"Important source entity with {relationsByEntity.GetValueOrDefault(entity.Id)} graph references.",
+                    EntityIds = [entity.Id],
+                    Sources = entity.Sources,
+                    Evidence = entity.Sources,
+                })
+                .ToList(),
+            Scenes = CreateTypedCandidates(analysis.Entities, EntityType.Scene),
+            Data = CreateTypedCandidates(analysis.Entities, EntityType.Data),
+            Packages = CreateTypedCandidates(analysis.Entities, EntityType.Package),
+        };
+
+        return plan;
+    }
+
+    private static IEnumerable<DocumentPlanCandidate> CreateGroupCandidates(
+        IReadOnlyList<Entity> entities,
+        Func<Entity, string?> groupSelector,
+        string kind)
+        => entities
+            .Select(entity => new { Entity = entity, Group = groupSelector(entity) })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Group))
+            .GroupBy(item => item.Group!, StringComparer.Ordinal)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new DocumentPlanCandidate
+            {
+                Id = $"{kind}-{NormalizePlanId(group.Key)}",
+                Title = group.Key,
+                Reason = $"Deterministic {kind} candidate from folder/namespace/assembly clustering.",
+                EntityIds = group.Select(item => item.Entity.Id).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToList(),
+                Sources = group.SelectMany(item => item.Entity.Sources).Distinct(StringComparer.Ordinal).OrderBy(source => source, StringComparer.Ordinal).Take(50).ToList(),
+                Evidence = group.SelectMany(item => item.Entity.Sources).Distinct(StringComparer.Ordinal).OrderBy(source => source, StringComparer.Ordinal).Take(10).ToList(),
+            });
+
+    private static List<DocumentPlanCandidate> CreateTypedCandidates(IEnumerable<Entity> entities, EntityType type)
+        => entities
+            .Where(entity => entity.Type == type)
+            .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+            .Take(50)
+            .Select(entity => new DocumentPlanCandidate
+            {
+                Id = entity.Id,
+                Title = entity.Title,
+                Reason = $"{type} entity extracted from project analysis.",
+                EntityIds = [entity.Id],
+                Sources = entity.Sources,
+                Evidence = entity.Sources,
+            })
+            .ToList();
+
+    private static string? GetSystemGroup(Entity entity)
+    {
+        if (!string.IsNullOrWhiteSpace(entity.Namespace))
+        {
+            var parts = entity.Namespace.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return string.Join('.', parts.Take(2));
+            }
+        }
+
+        var source = entity.Sources.FirstOrDefault();
+        if (source is null)
+        {
+            return null;
+        }
+
+        var segments = source.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length >= 2 ? string.Join('/', segments.Take(2)) : segments[0];
+    }
+
+    private static string? GetFeatureGroup(Entity entity)
+    {
+        var source = entity.Sources.FirstOrDefault();
+        if (source is null)
+        {
+            return null;
+        }
+
+        var segments = source.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 3 && string.Equals(segments[0], "Assets", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Join('/', segments.Take(3));
+        }
+
+        return segments.Length >= 2 ? string.Join('/', segments.Take(2)) : null;
+    }
+
+    private static string NormalizePlanId(string value)
+    {
+        var chars = value.Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-').ToArray();
+        return new string(chars).Trim('-');
+    }
+
+    private static EntitySummary CreateEntitySummary(Entity entity) => new()
+    {
+        Id = entity.Id,
+        Type = entity.Type,
+        Title = entity.Title,
+        Namespace = entity.Namespace,
+        Assembly = entity.Members.FirstOrDefault(member => member.StartsWith("assembly:", StringComparison.OrdinalIgnoreCase))?.Split(':', 2)[1].Trim(),
+        Sources = entity.Sources,
+        Members = entity.Members,
+        CodeOwnership = CodeOwnershipClassifier.Classify(entity),
+    };
+
+    private static HashSet<string> ExpandRelatedIds(string entityId, IReadOnlyList<Relation> relations, int depth)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { entityId };
+        var frontier = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { entityId };
+        for (var level = 0; level < depth; level++)
+        {
+            var next = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var relation in relations)
+            {
+                if (frontier.Contains(relation.Source) && visited.Add(relation.Target))
+                {
+                    next.Add(relation.Target);
+                }
+
+                if (frontier.Contains(relation.Target) && visited.Add(relation.Source))
+                {
+                    next.Add(relation.Source);
+                }
+            }
+
+            if (next.Count == 0)
+            {
+                break;
+            }
+
+            frontier = next;
+        }
+
+        return visited;
+    }
+
+    private static bool Contains(string? value, string query) =>
+        value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static int NormalizeLimit(int value, int defaultLimit) =>
+        value <= 0 ? defaultLimit : Math.Min(value, 1_000);
 
     private static List<Relation> OrderRelations(IEnumerable<Relation> relations) => relations
         .OrderBy(relation => relation.Source, StringComparer.Ordinal)

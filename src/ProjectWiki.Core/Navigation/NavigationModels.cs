@@ -73,7 +73,11 @@ public sealed class NavigationValidationResult
 {
     public List<NavigationValidationIssue> Issues { get; init; } = new();
 
-    public bool IsValid => Issues.Count == 0;
+    public List<NavigationValidationIssue> StructureIssues { get; init; } = new();
+
+    public List<NavigationValidationIssue> QualityIssues { get; init; } = new();
+
+    public bool IsValid => Issues.Count == 0 && QualityIssues.Count == 0;
 }
 
 public sealed class NavigationValidationIssue
@@ -99,6 +103,10 @@ public enum NavigationIssueSeverity
 public sealed class WikiNavigationOptions
 {
     public required string WikiRoot { get; init; }
+
+    public bool RequireDocuments { get; init; }
+
+    public double MinCoverage { get; init; }
 }
 
 public sealed class WikiNavigationResult

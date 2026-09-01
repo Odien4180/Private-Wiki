@@ -1,0 +1,7 @@
+interface:
+  display_name: "Project Wiki"
+  short_description: "Create source-grounded project wiki documentation"
+  default_prompt: "Use $project-wiki to analyze this project and build a complete source-grounded wiki."
+
+policy:
+  allow_implicit_invocation: true

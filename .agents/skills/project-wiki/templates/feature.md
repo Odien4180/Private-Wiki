@@ -5,6 +5,9 @@
 <!-- AUTO:SUMMARY:START -->
 <!-- AUTO:SUMMARY:END -->
 
+<!-- AGENT:EXPLANATION:START -->
+<!-- AGENT:EXPLANATION:END -->
+
 ## 실행 흐름
 
 <!-- AUTO:FLOW:START -->
