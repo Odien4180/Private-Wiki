@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace ProjectWiki.Core.Documents;
 
 public sealed class MarkdownDocumentStore
@@ -28,13 +30,14 @@ public sealed class MarkdownDocumentStore
             _ => ["SUMMARY", "ARCHITECTURE", "RELATIONS"],
         };
 
-        var content = $"# {title}{Environment.NewLine}";
+        var content = new StringBuilder($"# {title}{Environment.NewLine}");
         foreach (var section in sections)
         {
-            content += $"{Environment.NewLine}<!-- AUTO:{section}:START -->{Environment.NewLine}<!-- AUTO:{section}:END -->{Environment.NewLine}";
+            content.Append($"{Environment.NewLine}<!-- AUTO:{section}:START -->{Environment.NewLine}<!-- AUTO:{section}:END -->{Environment.NewLine}");
         }
 
-        return content + $"{Environment.NewLine}## Developer Notes{Environment.NewLine}{Environment.NewLine}";
+        content.Append($"{Environment.NewLine}## Developer Notes{Environment.NewLine}{Environment.NewLine}");
+        return content.ToString();
     }
 
     private static string ReplaceAutoSection(string content, string section, string value)

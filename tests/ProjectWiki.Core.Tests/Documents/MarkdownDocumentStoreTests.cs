@@ -65,6 +65,18 @@ public class MarkdownDocumentStoreTests : IDisposable
         Assert.Throws<InvalidDataException>(() => store.Write(_documentsRoot, CreatePlan("Summary")));
     }
 
+    [Fact]
+    public void Write_RejectsMissingAutoEndMarker()
+    {
+        var path = Path.Combine(_documentsRoot, "architecture", "overview.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "<!-- AUTO:SUMMARY:START -->");
+
+        var store = new MarkdownDocumentStore();
+
+        Assert.Throws<InvalidDataException>(() => store.Write(_documentsRoot, CreatePlan("Summary")));
+    }
+
     private static DocumentPlan CreatePlan(string summary) => new()
     {
         RelativePath = "architecture/overview.md",
