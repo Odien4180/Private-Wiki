@@ -71,6 +71,19 @@ public class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public void Validate_RunsAgainstInitializedWiki()
+    {
+        var (initCode, _, initError) = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);
+        Assert.True(initCode == 0, $"init failed: {initError}");
+
+        var (exitCode, stdOut, stdErr) = CliRunner.Run("validate", "--wiki", _wikiRoot);
+
+        Assert.True(exitCode == 0, $"validate failed. stdout: {stdOut}\nstderr: {stdErr}");
+        using var result = JsonDocument.Parse(stdOut);
+        Assert.True(result.RootElement.GetProperty("isValid").GetBoolean());
+    }
+
+    [Fact]
     public void UpdateRebuildAndInspect_OperateOnAnInitializedWiki()
     {
         var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);

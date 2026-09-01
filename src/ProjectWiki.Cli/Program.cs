@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Net;
 using ProjectWiki.Core.Engine;
+using ProjectWiki.Core.Navigation;
 using ProjectWiki.Core.Persistence;
 using ProjectWiki.Core.Site;
 
@@ -24,6 +25,8 @@ switch (command)
         return RunUpdate(options, isRebuild: true);
     case "inspect":
         return RunInspect(GetInspectEntity(commandArguments), options);
+    case "validate":
+        return RunValidate(options);
     case "build":
         return RunBuild(options);
     case "serve":
@@ -150,6 +153,27 @@ static int RunBuild(Dictionary<string, string> options)
     }
 }
 
+static int RunValidate(Dictionary<string, string> options)
+{
+    if (!options.TryGetValue("wiki", out var wikiRoot) || string.IsNullOrWhiteSpace(wikiRoot))
+    {
+        Console.Error.WriteLine("Missing required option: --wiki <path>");
+        return 1;
+    }
+
+    try
+    {
+        var result = new WikiEngine().ValidateNavigation(new WikiNavigationOptions { WikiRoot = wikiRoot });
+        Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Default));
+        return result.IsValid ? 0 : 1;
+    }
+    catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+    {
+        Console.Error.WriteLine($"validate failed: {ex.Message}");
+        return 1;
+    }
+}
+
 static int RunServe(Dictionary<string, string> options)
 {
     if (!options.TryGetValue("wiki", out var wikiRoot) || string.IsNullOrWhiteSpace(wikiRoot))
@@ -232,6 +256,7 @@ static void PrintUsage()
           project-wiki update --wiki <path>
           project-wiki rebuild --wiki <path>
           project-wiki inspect <entity> --wiki <path>
+          project-wiki validate --wiki <path>
           project-wiki build --wiki <path>
           project-wiki serve --wiki <path> [--port <1-65535>]
 
