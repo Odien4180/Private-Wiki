@@ -5,6 +5,7 @@ using ProjectWiki.Core.Model;
 using ProjectWiki.Core.Navigation;
 using ProjectWiki.Core.Persistence;
 using ProjectWiki.Core.Scanning;
+using ProjectWiki.Core.Site;
 
 namespace ProjectWiki.Core.Engine;
 
@@ -263,6 +264,28 @@ public sealed class WikiEngine
     {
         var wikiRoot = ValidateWikiRoot(options);
         return new NavigationService().Validate(wikiRoot);
+    }
+
+    /// <summary>
+    /// Builds a deterministic static HTML site from the persisted Markdown
+    /// documents and navigation data.
+    /// </summary>
+    public WikiBuildResult BuildSite(WikiBuildOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });
+        return new SiteGenerator().Build(wikiRoot);
+    }
+
+    /// <summary>
+    /// Builds the static site and serves it over an IPv4 loopback-only HTTP
+    /// listener until the supplied cancellation token is cancelled.
+    /// </summary>
+    public WikiServeResult Serve(WikiServeOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });
+        return new LocalSiteServer().Serve(wikiRoot, options.Port, cancellationToken);
     }
 
     /// <summary>

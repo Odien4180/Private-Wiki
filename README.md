@@ -31,8 +31,9 @@ dotnet test
 dotnet run --project src/ProjectWiki.Cli -- init --project /path/to/project --wiki /path/to/wiki
 dotnet run --project src/ProjectWiki.Cli -- update --wiki /path/to/wiki
 dotnet run --project src/ProjectWiki.Cli -- inspect entity-id --wiki /path/to/wiki
+dotnet run --project src/ProjectWiki.Cli -- build --wiki /path/to/wiki
+dotnet run --project src/ProjectWiki.Cli -- serve --wiki /path/to/wiki --port 8080
 ```
 
-Later milestones (document generation, cross-linking, web UI)
-are tracked in
-[`.agents/skills/project-wiki/docs/architecture.md`](.agents/skills/project-wiki/docs/architecture.md).
+`build` creates a static site in `<wiki>/site`; `serve` binds it only to
+`127.0.0.1`.

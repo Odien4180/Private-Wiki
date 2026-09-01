@@ -97,5 +97,5 @@ as functionality grows:
   detection, impact analysis, incremental document update, recent changes.
 - **M5 - Unity**: GUID, scene, prefab, asset, asmdef, and package analysis.
   *(implemented)*
-- **M6 - Web UI**: site generator, search, TOC, caption popup, backlinks,
-  health, serve.
+- **M6 - Web UI**: deterministic static site generator, JSON search, TOC,
+  source captions, backlinks, health report, and loopback-only serve.

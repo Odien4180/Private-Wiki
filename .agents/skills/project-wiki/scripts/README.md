@@ -28,8 +28,8 @@ dotnet test
 | `project-wiki rebuild --wiki <path>` | Implemented (Milestones 4 and 5) |
 | `project-wiki inspect <entity> --wiki <path>` | Implemented (Milestone 4) |
 | `project-wiki validate --wiki <path>` | CLI wiring planned; the Milestone 3 engine API is implemented |
-| `project-wiki build --wiki <path>` | Planned (Milestone 6) |
-| `project-wiki serve --wiki <path>` | Planned (Milestone 6) |
+| `project-wiki build --wiki <path>` | Implemented (Milestone 6) |
+| `project-wiki serve --wiki <path> [--port <1-65535>]` | Implemented (Milestone 6) |
 
 `init` scans the project, runs the C# static analyzer, and, only for detected
 Unity projects, extracts `.meta` GUID mappings, serialized scene/prefab/asset
@@ -50,6 +50,13 @@ blocks. `rebuild` performs the same full reindex explicitly. `inspect` resolves
 an entity id, alias, or redirect and returns the entity, adjacent relations,
 and backlinks as JSON. Unity projects rerun the same Unity analyzer on update
 and rebuild; other project types run no Unity analysis.
+
+`build` deterministically renders Markdown documents into `<wiki>/site`,
+including a sidebar, per-page table of contents, resolved wiki links,
+backlinks, source captions from `knowledge/captions.json`, a client-side
+`search-index.json`, and `reports/site-health.json`. `serve` first performs
+the same build, then exposes only generated files over `127.0.0.1`; it rejects
+path traversal requests and non-loopback binding.
 
 Example:
 

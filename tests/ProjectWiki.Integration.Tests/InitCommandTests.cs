@@ -94,6 +94,24 @@ public class InitCommandTests : IDisposable
         Assert.True(rebuild.RootElement.GetProperty("isRebuild").GetBoolean());
     }
 
+    [Fact]
+    public void Build_WritesStaticSiteAndServeRejectsAnInvalidPort()
+    {
+        var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);
+        Assert.Equal(0, init.ExitCode);
+
+        var (buildCode, buildOutput, buildError) = CliRunner.Run("build", "--wiki", _wikiRoot);
+
+        Assert.True(buildCode == 0, $"build failed. stdout: {buildOutput}\nstderr: {buildError}");
+        using var build = JsonDocument.Parse(buildOutput);
+        Assert.Equal(1, build.RootElement.GetProperty("documentCount").GetInt32());
+        Assert.True(File.Exists(Path.Combine(_wikiRoot, "site", "index.html")));
+        Assert.True(File.Exists(Path.Combine(_wikiRoot, "site", "search-index.json")));
+        var (serveCode, _, serveError) = CliRunner.Run("serve", "--wiki", _wikiRoot, "--port", "0");
+        Assert.NotEqual(0, serveCode);
+        Assert.Contains("port", serveError, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string FindFixtureRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
