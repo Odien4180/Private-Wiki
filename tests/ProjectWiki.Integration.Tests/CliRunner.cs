@@ -23,9 +23,13 @@ internal static class CliRunner
         };
 
         using var process = Process.Start(psi)!;
-        var stdOut = process.StandardOutput.ReadToEnd();
-        var stdErr = process.StandardError.ReadToEnd();
+        var stdOutTask = process.StandardOutput.ReadToEndAsync();
+        var stdErrTask = process.StandardError.ReadToEndAsync();
+        Task.WaitAll(stdOutTask, stdErrTask);
         process.WaitForExit();
+
+        var stdOut = stdOutTask.Result;
+        var stdErr = stdErrTask.Result;
 
         return (process.ExitCode, stdOut, stdErr);
     }

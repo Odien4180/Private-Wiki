@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace ProjectWiki.Core.Scanning;
@@ -10,11 +11,12 @@ namespace ProjectWiki.Core.Scanning;
 /// </summary>
 public static class GlobMatcher
 {
+    private static readonly ConcurrentDictionary<string, Regex> RegexCache = new();
+
     public static bool IsMatch(string relativePath, string pattern)
     {
         var normalizedPath = Normalize(relativePath);
-        var normalizedPattern = Normalize(pattern);
-        var regex = BuildRegex(normalizedPattern);
+        var regex = GetOrBuildRegex(pattern);
         return regex.IsMatch(normalizedPath);
     }
 
@@ -23,7 +25,7 @@ public static class GlobMatcher
         var normalizedPath = Normalize(relativePath);
         foreach (var pattern in patterns)
         {
-            if (BuildRegex(Normalize(pattern)).IsMatch(normalizedPath))
+            if (GetOrBuildRegex(pattern).IsMatch(normalizedPath))
             {
                 return true;
             }
@@ -33,6 +35,9 @@ public static class GlobMatcher
     }
 
     private static string Normalize(string path) => path.Replace('\\', '/').TrimStart('/');
+
+    private static Regex GetOrBuildRegex(string pattern) =>
+        RegexCache.GetOrAdd(Normalize(pattern), BuildRegex);
 
     private static Regex BuildRegex(string pattern)
     {
