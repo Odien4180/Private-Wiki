@@ -74,12 +74,7 @@ public sealed class WikiEngine
             AdditionalExclusions = options.AdditionalExclusions,
         });
 
-        var csharpFiles = scannedFiles
-            .Where(f => string.Equals(f.Extension, ".cs", StringComparison.OrdinalIgnoreCase))
-            .Select(f => new CSharpSourceFile(f.Path, Path.Combine(projectRoot, f.Path)))
-            .ToList();
-
-        var analysis = new CSharpAnalyzer().Analyze(csharpFiles);
+        var analysis = AnalyzeProject(projectRoot, scannedFiles, projectType);
 
         var gitInfo = GitRepositoryDetector.TryDetect(projectRoot);
 
@@ -348,7 +343,7 @@ public sealed class WikiEngine
         var changes = ChangeDetector.Detect(previousHashes, currentFiles);
         var previousEntities = new NavigationStore().Load(wikiRoot).Entities.Entities;
         var previousRelations = LoadRelations(wikiRoot);
-        var currentAnalysis = AnalyzeCSharp(projectRoot, currentFiles);
+        var currentAnalysis = AnalyzeProject(projectRoot, currentFiles, config.Project.Type);
         var analysis = MergeAnalysis(previousEntities, previousRelations, currentAnalysis);
         var impact = RelationImpactAnalyzer.Analyze(
             changes,
@@ -383,11 +378,32 @@ public sealed class WikiEngine
         };
     }
 
-    private static AnalysisResult AnalyzeCSharp(string projectRoot, IReadOnlyList<ScannedFile> scannedFiles) =>
-        new CSharpAnalyzer().Analyze(scannedFiles
+    private static AnalysisResult AnalyzeProject(
+        string projectRoot,
+        IReadOnlyList<ScannedFile> scannedFiles,
+        ProjectType projectType)
+    {
+        var csharpAnalysis = new CSharpAnalyzer().Analyze(scannedFiles
             .Where(file => string.Equals(file.Extension, ".cs", StringComparison.OrdinalIgnoreCase))
             .Select(file => new CSharpSourceFile(file.Path, Path.Combine(projectRoot, file.Path)))
             .ToList());
+        if (projectType != ProjectType.Unity)
+        {
+            return csharpAnalysis;
+        }
+
+        var unityAnalysis = new UnityAnalyzer().Analyze(
+            projectRoot,
+            scannedFiles,
+            csharpAnalysis.Entities.Select(entity => entity.Id));
+        return new AnalysisResult
+        {
+            Entities = csharpAnalysis.Entities.Concat(unityAnalysis.Entities)
+                .OrderBy(entity => entity.Id, StringComparer.Ordinal)
+                .ToList(),
+            Relations = OrderRelations(csharpAnalysis.Relations.Concat(unityAnalysis.Relations)),
+        };
+    }
 
     private static Dictionary<string, string> LoadHashes(string wikiRoot)
     {
@@ -450,13 +466,15 @@ public sealed class WikiEngine
     }
 
     private static bool IsAnalyzerManaged(Entity entity) =>
-        entity.Sources.Count > 0
-        && entity.Type is EntityType.Class or EntityType.Struct or EntityType.Interface or EntityType.Enum;
+        UnityAnalyzer.IsManaged(entity)
+        || (entity.Sources.Count > 0
+            && entity.Type is EntityType.Class or EntityType.Struct or EntityType.Interface or EntityType.Enum);
 
     private static bool IsAnalyzerManaged(Relation relation) =>
-        relation.Type is RelationType.Inherits or RelationType.Implements
-        && relation.Confidence == Confidence.High
-        && relation.Evidence.Count > 0;
+        UnityAnalyzer.IsManaged(relation)
+        || (relation.Type is RelationType.Inherits or RelationType.Implements
+            && relation.Confidence == Confidence.High
+            && relation.Evidence.Count > 0);
 
     private static List<Relation> OrderRelations(IEnumerable<Relation> relations) => relations
         .OrderBy(relation => relation.Source, StringComparer.Ordinal)

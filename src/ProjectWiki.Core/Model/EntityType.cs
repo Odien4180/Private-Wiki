@@ -17,6 +17,7 @@ public enum EntityType
     Service,
     Manager,
     Component,
+    Asset,
     Scene,
     Prefab,
     Data,

@@ -10,7 +10,7 @@
       "type": "string",
       "enum": [
         "project", "architecture", "system", "feature", "class", "struct", "enum", "interface",
-        "service", "manager", "component", "scene", "prefab", "data",
+        "service", "manager", "component", "asset", "scene", "prefab", "data",
         "config", "package", "external", "tool"
       ]
     },

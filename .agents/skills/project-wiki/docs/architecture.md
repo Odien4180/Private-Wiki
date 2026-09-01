@@ -95,7 +95,7 @@ as functionality grows:
   agent-authored cross-link insertion remain later work.
 - **M4 - Incremental Update**: git tracking, hash tracking, rename
   detection, impact analysis, incremental document update, recent changes.
-- **M5 - Unity**: GUID, scene, prefab, ScriptableObject, asmdef, package
-  analysis.
+- **M5 - Unity**: GUID, scene, prefab, asset, asmdef, and package analysis.
+  *(implemented)*
 - **M6 - Web UI**: site generator, search, TOC, caption popup, backlinks,
   health, serve.

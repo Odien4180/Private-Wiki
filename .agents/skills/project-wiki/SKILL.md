@@ -33,9 +33,9 @@ Required:
 - serve
 
 > Implementation status: `init`, the Milestone 3 deterministic navigation
-> engine API, and Milestone 4 `update`, `rebuild`, and `inspect` commands are
-> implemented. `validate` CLI wiring and `serve` remain planned (see `docs/`
-> for the milestone breakdown).
+> engine API, Milestone 4 `update`, `rebuild`, and `inspect` commands, and
+> Milestone 5 Unity analysis are implemented. `validate` CLI wiring and
+> `serve` remain planned (see `docs/` for the milestone breakdown).
 
 ## Workflow
 

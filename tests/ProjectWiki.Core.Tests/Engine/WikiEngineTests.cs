@@ -52,6 +52,7 @@ public class WikiEngineTests : IDisposable
 
         Assert.Equal(2, result.EntityCount);
         Assert.Equal(1, result.RelationCount);
+        Assert.Equal(ProjectWiki.Core.Config.ProjectType.Generic, result.ProjectType);
         Assert.False(result.IsGitRepository);
 
         Assert.True(File.Exists(Path.Combine(_wikiRoot, "wiki.config.json")));

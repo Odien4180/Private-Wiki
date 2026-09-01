@@ -1,0 +1,7 @@
+--- !u!1 &1000
+GameObject:
+  m_Name: Main
+--- !u!114 &1001
+MonoBehaviour:
+  m_Script: {fileID: 11500000, guid: dddddddddddddddddddddddddddddddd, type: 3}
+  m_Prefab: {fileID: 100100000, guid: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, type: 3}

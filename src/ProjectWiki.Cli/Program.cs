@@ -164,7 +164,7 @@ static Dictionary<string, string> ParseOptions(string[] rest)
 static void PrintUsage()
 {
     Console.WriteLine("""
-        project-wiki - reusable project wiki engine (Milestone 4: incremental updates)
+        project-wiki - reusable project wiki engine (Milestone 5: Unity analysis)
 
         Usage:
           project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]
@@ -173,7 +173,8 @@ static void PrintUsage()
           project-wiki inspect <entity> --wiki <path>
 
         Updates use persisted SHA-256 snapshots, preserve manual document content,
-        and rebuild the deterministic backlink index.
+        rebuild the deterministic backlink index, and rerun Unity analysis only
+        for Unity projects.
         Not yet implemented (planned milestones): validate, build, serve.
         """);
 }

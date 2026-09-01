@@ -1,0 +1,6 @@
+--- !u!1 &2000
+GameObject:
+  m_Name: Player
+--- !u!114 &2001
+MonoBehaviour:
+  m_Settings: {fileID: 11400000, guid: cccccccccccccccccccccccccccccccc, type: 2}
