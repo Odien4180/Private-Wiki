@@ -111,6 +111,19 @@ implementation status.
 
 ## Installation and fallback
 
+Install the reusable skill into the user's Codex skills directory:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R <skill-repo>/.agents/skills/project-wiki ~/.codex/skills/project-wiki
+```
+
+On Windows, copy the folder to:
+
+```text
+C:\Users\<User>\.codex\skills\project-wiki
+```
+
 When `project-wiki` is not available on `PATH`, first try:
 
 ```bash
@@ -126,3 +139,6 @@ dotnet run --project <skill-repo>/src/ProjectWiki.Cli -- <command>
 If neither the global tool nor the local source checkout is available, stop and
 tell the user how to install the skill and CLI instead of guessing analysis
 facts.
+
+After installation, start a fresh Codex session and verify that `$project-wiki`
+is discoverable before using it in another repository.

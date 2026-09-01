@@ -22,6 +22,17 @@ dotnet pack src/ProjectWiki.Cli/ProjectWiki.Cli.csproj -c Release
 
 ## Install as a .NET global tool
 
+First install or copy the skill package itself so Codex can discover
+`$project-wiki`:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R .agents/skills/project-wiki ~/.codex/skills/project-wiki
+```
+
+On Windows, copy `.agents/skills/project-wiki` to
+`C:\Users\<User>\.codex\skills\project-wiki`.
+
 From a published package feed:
 
 ```bash
