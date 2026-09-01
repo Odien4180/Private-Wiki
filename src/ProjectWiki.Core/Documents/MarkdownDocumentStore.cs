@@ -7,9 +7,13 @@ public sealed class MarkdownDocumentStore
     public void Write(string documentsRoot, DocumentPlan plan)
     {
         var path = Path.Combine(documentsRoot, plan.RelativePath);
-        var content = File.Exists(path)
-            ? File.ReadAllText(path)
-            : CreateDocument(plan.Title, plan.Template);
+        var exists = File.Exists(path);
+        var content = exists ? File.ReadAllText(path) : CreateDocument(plan.Title, plan.Template);
+
+        if (exists)
+        {
+            ValidateTemplate(content, plan.Template);
+        }
 
         foreach (var (section, value) in plan.AutoSections)
         {
@@ -22,14 +26,7 @@ public sealed class MarkdownDocumentStore
 
     private static string CreateDocument(string title, DocumentTemplate template)
     {
-        string[] sections = template switch
-        {
-            DocumentTemplate.System => ["SUMMARY", "ARCHITECTURE", "FLOW", "RELATIONS"],
-            DocumentTemplate.Feature => ["SUMMARY", "FLOW", "RELATIONS"],
-            DocumentTemplate.Class => ["SUMMARY", "RELATIONS"],
-            _ => ["SUMMARY", "ARCHITECTURE", "RELATIONS"],
-        };
-
+        var sections = GetSections(template);
         var content = new StringBuilder($"# {title}{Environment.NewLine}");
         foreach (var section in sections)
         {
@@ -38,6 +35,26 @@ public sealed class MarkdownDocumentStore
 
         content.Append($"{Environment.NewLine}## Developer Notes{Environment.NewLine}{Environment.NewLine}");
         return content.ToString();
+    }
+
+    private static string[] GetSections(DocumentTemplate template) => template switch
+    {
+        DocumentTemplate.System => ["SUMMARY", "ARCHITECTURE", "FLOW", "RELATIONS"],
+        DocumentTemplate.Feature => ["SUMMARY", "FLOW", "RELATIONS"],
+        DocumentTemplate.Class => ["SUMMARY", "RELATIONS"],
+        _ => ["SUMMARY", "ARCHITECTURE", "RELATIONS"],
+    };
+
+    private static void ValidateTemplate(string content, DocumentTemplate template)
+    {
+        foreach (var section in GetSections(template))
+        {
+            if (!content.Contains($"<!-- AUTO:{section}:START -->", StringComparison.Ordinal)
+                || !content.Contains($"<!-- AUTO:{section}:END -->", StringComparison.Ordinal))
+            {
+                throw new InvalidDataException($"Document does not match the '{template}' template.");
+            }
+        }
     }
 
     private static string ReplaceAutoSection(string content, string section, string value)
