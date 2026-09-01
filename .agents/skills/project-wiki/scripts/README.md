@@ -24,8 +24,9 @@ dotnet test
 | Command | Status |
 |---|---|
 | `project-wiki init --project <path> --wiki <path> [--title <title>] [--language <lang>]` | Implemented (Milestone 1: deterministic core only) |
-| `project-wiki update --wiki <path>` | Planned (Milestone 4) |
-| `project-wiki inspect <entity> --wiki <path>` | Planned |
+| `project-wiki update --wiki <path>` | Implemented (Milestone 4) |
+| `project-wiki rebuild --wiki <path>` | Implemented (Milestone 4) |
+| `project-wiki inspect <entity> --wiki <path>` | Implemented (Milestone 4) |
 | `project-wiki validate --wiki <path>` | CLI wiring planned; the Milestone 3 engine API is implemented |
 | `project-wiki build --wiki <path>` | Planned (Milestone 6) |
 | `project-wiki serve --wiki <path>` | Planned (Milestone 6) |
@@ -37,6 +38,14 @@ typed aliases and redirects and atomically writes an empty backlink index.
 The public `WikiEngine.BuildNavigation` and
 `WikiEngine.ValidateNavigation` methods provide the Milestone 3 deterministic
 navigation core; corresponding CLI commands are not wired yet.
+
+`update` compares the persisted and current SHA-256 source snapshots to
+deterministically report additions, modifications, deletions, and unambiguous
+renames. It reindexes the graph, calculates relation-graph impact, appends a
+typed entry to `tracking/updates.json`, and only refreshes document `AUTO`
+blocks. `rebuild` performs the same full reindex explicitly. `inspect` resolves
+an entity id, alias, or redirect and returns the entity, adjacent relations,
+and backlinks as JSON.
 
 Example:
 

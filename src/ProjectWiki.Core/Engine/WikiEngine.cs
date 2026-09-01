@@ -43,9 +43,9 @@ public sealed class WikiInitResult
 /// detect project type, scan files, run static analysis, build the
 /// knowledge graph, and persist it under <c>wiki_root</c>.
 ///
-/// This includes initial documents and the deterministic Milestone 3
-/// navigation index. Captions, Unity parsing, incremental update, and CLI
-/// commands beyond <c>init</c> remain outside this workflow.
+/// This includes initial documents and the deterministic navigation index.
+/// Incremental source updates preserve human-authored document content by
+/// replacing only known AUTO blocks.
 /// </summary>
 public sealed class WikiEngine
 {
@@ -84,8 +84,8 @@ public sealed class WikiEngine
         var gitInfo = GitRepositoryDetector.TryDetect(projectRoot);
 
         WriteConfig(wikiRoot, options, projectRoot, projectType);
-        WriteKnowledge(wikiRoot, analysis);
-        WriteTracking(wikiRoot, scannedFiles, gitInfo);
+        WriteKnowledge(wikiRoot, analysis, initializeNavigation: true);
+        WriteTracking(wikiRoot, scannedFiles, gitInfo, resetUpdates: true);
         CreateWikiSkeleton(wikiRoot);
         WriteInitialDocuments(wikiRoot, options, projectType, analysis);
         BuildNavigation(new WikiNavigationOptions { WikiRoot = wikiRoot });
@@ -118,18 +118,38 @@ public sealed class WikiEngine
         AtomicFile.WriteJson(Path.Combine(wikiRoot, "wiki.config.json"), config);
     }
 
-    private static void WriteKnowledge(string wikiRoot, AnalysisResult analysis)
+    private static void WriteKnowledge(string wikiRoot, AnalysisResult analysis, bool initializeNavigation)
     {
         var knowledgeDir = Path.Combine(wikiRoot, "knowledge");
         Directory.CreateDirectory(knowledgeDir);
 
-        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "entities.json"), new { entities = analysis.Entities.OrderBy(e => e.Id, StringComparer.Ordinal) });
-        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "relations.json"), new { relations = analysis.Relations.OrderBy(r => r.Source, StringComparer.Ordinal).ThenBy(r => r.Target, StringComparer.Ordinal).ThenBy(r => r.Type) });
-        new NavigationStore().Initialize(wikiRoot, analysis.Entities);
-        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "captions.json"), new { captions = Array.Empty<object>() });
+        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "entities.json"), new EntityCatalog
+        {
+            Entities = analysis.Entities.OrderBy(e => e.Id, StringComparer.Ordinal).ToList(),
+        });
+        AtomicFile.WriteJson(Path.Combine(knowledgeDir, "relations.json"), new RelationCatalog
+        {
+            Relations = OrderRelations(analysis.Relations),
+        });
+
+        var navigationStore = new NavigationStore();
+        if (initializeNavigation)
+        {
+            navigationStore.Initialize(wikiRoot, analysis.Entities);
+            AtomicFile.WriteJson(Path.Combine(knowledgeDir, "captions.json"), new { captions = Array.Empty<object>() });
+        }
+        else
+        {
+            navigationStore.RefreshAliases(wikiRoot, analysis.Entities);
+        }
     }
 
-    private static void WriteTracking(string wikiRoot, IReadOnlyList<ScannedFile> scannedFiles, GitInfo? gitInfo)
+    private static void WriteTracking(
+        string wikiRoot,
+        IReadOnlyList<ScannedFile> scannedFiles,
+        GitInfo? gitInfo,
+        UpdateRecord? update = null,
+        bool resetUpdates = false)
     {
         var trackingDir = Path.Combine(wikiRoot, "tracking");
         Directory.CreateDirectory(trackingDir);
@@ -164,7 +184,16 @@ public sealed class WikiEngine
         };
         AtomicFile.WriteJson(Path.Combine(trackingDir, "git.json"), git);
 
-        AtomicFile.WriteJson(Path.Combine(trackingDir, "updates.json"), new { updates = Array.Empty<object>() });
+        var updatesPath = Path.Combine(trackingDir, "updates.json");
+        var priorUpdates = File.Exists(updatesPath)
+            ? AtomicFile.ReadJson<UpdatesTracking>(updatesPath)
+            : new UpdatesTracking();
+        AtomicFile.WriteJson(updatesPath, new UpdatesTracking
+        {
+            Updates = update is null
+                ? (resetUpdates ? new List<UpdateRecord>() : priorUpdates.Updates)
+                : priorUpdates.Updates.Append(update).ToList(),
+        });
     }
 
     private static void CreateWikiSkeleton(string wikiRoot)
@@ -193,10 +222,21 @@ public sealed class WikiEngine
         WikiInitOptions options,
         ProjectType projectType,
         AnalysisResult analysis)
+        => WriteInitialDocuments(
+            wikiRoot,
+            options.Title ?? new DirectoryInfo(Path.GetFullPath(options.ProjectRoot)).Name,
+            projectType,
+            analysis);
+
+    private static void WriteInitialDocuments(
+        string wikiRoot,
+        string title,
+        ProjectType projectType,
+        AnalysisResult analysis)
     {
         var plans = new InitialDocumentPlanner().Plan(new DocumentPlanningContext
         {
-            WikiTitle = options.Title ?? new DirectoryInfo(Path.GetFullPath(options.ProjectRoot)).Name,
+            WikiTitle = title,
             ProjectType = projectType,
             Entities = analysis.Entities,
             Relations = analysis.Relations,
@@ -228,6 +268,220 @@ public sealed class WikiEngine
     {
         var wikiRoot = ValidateWikiRoot(options);
         return new NavigationService().Validate(wikiRoot);
+    }
+
+    /// <summary>
+    /// Reindexes a persisted wiki's configured project. Changes are derived
+    /// solely from SHA-256 snapshots; git metadata remains informational.
+    /// </summary>
+    public WikiUpdateResult Update(WikiUpdateOptions options) => Reindex(options, isRebuild: false);
+
+    /// <summary>
+    /// Reindexes the entire configured project while preserving custom
+    /// documents, aliases, redirects, and non-analyzer graph records.
+    /// </summary>
+    public WikiUpdateResult Rebuild(WikiRebuildOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return Reindex(new WikiUpdateOptions { WikiRoot = options.WikiRoot }, isRebuild: true);
+    }
+
+    /// <summary>Finds one entity through its id, alias, or redirect and returns its local graph context.</summary>
+    public WikiInspectResult Inspect(WikiInspectOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });
+        var data = new NavigationStore().Load(wikiRoot);
+        var resolution = new NavigationResolver(data).Resolve(options.Entity);
+        if (resolution.Status != NavigationResolutionStatus.Resolved)
+        {
+            return new WikiInspectResult
+            {
+                Query = options.Entity,
+                IsFound = false,
+                IsAmbiguous = resolution.Status == NavigationResolutionStatus.Ambiguous,
+            };
+        }
+
+        var entityId = resolution.EntityId!;
+        var relations = LoadRelations(wikiRoot)
+            .Where(relation => string.Equals(relation.Source, entityId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(relation.Target, entityId, StringComparison.OrdinalIgnoreCase));
+        var backlinks = data.Backlinks.Backlinks
+            .Where(backlink => string.Equals(backlink.Target, entityId, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(backlink => backlink.References)
+            .OrderBy(reference => reference.DocumentPath, StringComparer.Ordinal)
+            .ThenBy(reference => reference.Line)
+            .ThenBy(reference => reference.Column)
+            .ThenBy(reference => reference.LinkTarget, StringComparer.Ordinal)
+            .ToList();
+        return new WikiInspectResult
+        {
+            Query = options.Entity,
+            IsFound = true,
+            IsAmbiguous = false,
+            EntityId = entityId,
+            Entity = data.Entities.Entities.Single(entity =>
+                string.Equals(entity.Id, entityId, StringComparison.OrdinalIgnoreCase)),
+            Relations = OrderRelations(relations),
+            Backlinks = backlinks,
+        };
+    }
+
+    private static WikiUpdateResult Reindex(WikiUpdateOptions options, bool isRebuild)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });
+        var config = AtomicFile.ReadJson<WikiConfig>(Path.Combine(wikiRoot, "wiki.config.json"));
+        var projectRoot = Path.GetFullPath(config.Project.Root);
+        if (!Directory.Exists(projectRoot))
+        {
+            throw new DirectoryNotFoundException($"Project root does not exist: {projectRoot}");
+        }
+
+        var currentFiles = new ProjectScanner().Scan(projectRoot, new ProjectScannerOptions
+        {
+            AdditionalExclusions = config.Exclude,
+            UseGit = config.Analysis.Git,
+        });
+        var previousHashes = LoadHashes(wikiRoot);
+        var changes = ChangeDetector.Detect(previousHashes, currentFiles);
+        var previousEntities = new NavigationStore().Load(wikiRoot).Entities.Entities;
+        var previousRelations = LoadRelations(wikiRoot);
+        var currentAnalysis = AnalyzeCSharp(projectRoot, currentFiles);
+        var analysis = MergeAnalysis(previousEntities, previousRelations, currentAnalysis);
+        var impact = RelationImpactAnalyzer.Analyze(
+            changes,
+            previousEntities,
+            previousRelations,
+            analysis.Entities,
+            analysis.Relations);
+        var gitInfo = config.Analysis.Git ? GitRepositoryDetector.TryDetect(projectRoot) : null;
+
+        CreateWikiSkeleton(wikiRoot);
+        WriteKnowledge(wikiRoot, analysis, initializeNavigation: false);
+        WriteTracking(wikiRoot, currentFiles, gitInfo, new UpdateRecord
+        {
+            IndexedUtc = DateTime.UtcNow,
+            IsRebuild = isRebuild,
+            Changes = changes.ToList(),
+            Impact = impact,
+        });
+        WriteInitialDocuments(wikiRoot, config.Wiki.Title, config.Project.Type, analysis);
+        BuildNavigation(new WikiNavigationOptions { WikiRoot = wikiRoot });
+
+        return new WikiUpdateResult
+        {
+            WikiRoot = wikiRoot,
+            IsRebuild = isRebuild,
+            ScannedFileCount = currentFiles.Count,
+            EntityCount = analysis.Entities.Count,
+            RelationCount = analysis.Relations.Count,
+            IsGitRepository = gitInfo is not null,
+            Changes = changes.ToList(),
+            Impact = impact,
+        };
+    }
+
+    private static AnalysisResult AnalyzeCSharp(string projectRoot, IReadOnlyList<ScannedFile> scannedFiles) =>
+        new CSharpAnalyzer().Analyze(scannedFiles
+            .Where(file => string.Equals(file.Extension, ".cs", StringComparison.OrdinalIgnoreCase))
+            .Select(file => new CSharpSourceFile(file.Path, Path.Combine(projectRoot, file.Path)))
+            .ToList());
+
+    private static Dictionary<string, string> LoadHashes(string wikiRoot)
+    {
+        var path = Path.Combine(wikiRoot, "tracking", "hashes.json");
+        return File.Exists(path)
+            ? AtomicFile.ReadJson<HashesTracking>(path).Hashes
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+    }
+
+    private static List<Relation> LoadRelations(string wikiRoot)
+    {
+        var path = Path.Combine(wikiRoot, "knowledge", "relations.json");
+        return File.Exists(path)
+            ? AtomicFile.ReadJson<RelationCatalog>(path).Relations
+            : new List<Relation>();
+    }
+
+    private static AnalysisResult MergeAnalysis(
+        IEnumerable<Entity> previousEntities,
+        IEnumerable<Relation> previousRelations,
+        AnalysisResult currentAnalysis)
+    {
+        var priorEntities = previousEntities
+            .GroupBy(entity => entity.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(entity => entity.Title, StringComparer.Ordinal).First(),
+                StringComparer.OrdinalIgnoreCase);
+        var entities = currentAnalysis.Entities
+            .Select(entity => priorEntities.TryGetValue(entity.Id, out var prior)
+                ? new Entity
+                {
+                    Id = entity.Id,
+                    Type = entity.Type,
+                    Title = entity.Title,
+                    Aliases = prior.Aliases.Concat(entity.Aliases).Distinct(StringComparer.Ordinal).OrderBy(alias => alias, StringComparer.Ordinal).ToList(),
+                    Sources = entity.Sources,
+                    Symbols = entity.Symbols,
+                    Namespace = entity.Namespace,
+                    Members = entity.Members,
+                    Attributes = entity.Attributes,
+                }
+                : entity)
+            .ToList();
+        var currentIds = entities.Select(entity => entity.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        entities.AddRange(previousEntities
+            .Where(entity => !IsAnalyzerManaged(entity) && currentIds.Add(entity.Id)));
+
+        var relations = currentAnalysis.Relations.ToList();
+        var relationKeys = relations
+            .Select(RelationKey.From)
+            .ToHashSet(RelationKey.Comparer);
+        relations.AddRange(previousRelations.Where(relation =>
+            !IsAnalyzerManaged(relation) && relationKeys.Add(RelationKey.From(relation))));
+        return new AnalysisResult
+        {
+            Entities = entities.OrderBy(entity => entity.Id, StringComparer.Ordinal).ToList(),
+            Relations = OrderRelations(relations),
+        };
+    }
+
+    private static bool IsAnalyzerManaged(Entity entity) =>
+        entity.Sources.Count > 0
+        && entity.Type is EntityType.Class or EntityType.Struct or EntityType.Interface or EntityType.Enum;
+
+    private static bool IsAnalyzerManaged(Relation relation) =>
+        relation.Type is RelationType.Inherits or RelationType.Implements
+        && relation.Confidence == Confidence.High
+        && relation.Evidence.Count > 0;
+
+    private static List<Relation> OrderRelations(IEnumerable<Relation> relations) => relations
+        .OrderBy(relation => relation.Source, StringComparer.Ordinal)
+        .ThenBy(relation => relation.Target, StringComparer.Ordinal)
+        .ThenBy(relation => relation.Type)
+        .ToList();
+
+    private readonly record struct RelationKey(string Source, string Target, RelationType Type)
+    {
+        public static IEqualityComparer<RelationKey> Comparer { get; } = new RelationKeyComparer();
+
+        public static RelationKey From(Relation relation) => new(relation.Source, relation.Target, relation.Type);
+
+        private sealed class RelationKeyComparer : IEqualityComparer<RelationKey>
+        {
+            public bool Equals(RelationKey x, RelationKey y) =>
+                string.Equals(x.Source, y.Source, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Target, y.Target, StringComparison.OrdinalIgnoreCase)
+                && x.Type == y.Type;
+
+            public int GetHashCode(RelationKey obj) => HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Source),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Target),
+                obj.Type);
+        }
     }
 
     private static string ValidateWikiRoot(WikiNavigationOptions options)

@@ -21,34 +21,36 @@ public sealed class NavigationStore
 
     public void Initialize(string wikiRoot, IEnumerable<Entity> entities)
     {
-        var aliases = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entity in entities)
-        {
-            AddAlias(aliases, entity.Title, entity.Id);
-            foreach (var alias in entity.Aliases)
-            {
-                AddAlias(aliases, alias, entity.Id);
-            }
+        WriteAliases(wikiRoot, CreateGeneratedAliases(entities));
+        WriteRedirects(wikiRoot, new RedirectIndex());
+        WriteBacklinks(wikiRoot, new BacklinkIndex());
+    }
 
-            foreach (var symbol in entity.Symbols)
+    /// <summary>
+    /// Rebuilds analyzer-owned aliases while retaining existing aliases that
+    /// still target a current entity. Redirects are deliberately not touched.
+    /// </summary>
+    public void RefreshAliases(string wikiRoot, IEnumerable<Entity> entities)
+    {
+        var entityList = entities.OrderBy(entity => entity.Id, StringComparer.Ordinal).ToList();
+        var entityIds = entityList.ToDictionary(entity => entity.Id, StringComparer.OrdinalIgnoreCase);
+        var aliases = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var existing = ReadOrDefault<AliasIndex>(
+            Path.Combine(Path.GetFullPath(wikiRoot), "knowledge", "aliases.json"));
+
+        foreach (var entry in existing.Aliases.OrderBy(entry => entry.Alias, StringComparer.Ordinal))
+        {
+            foreach (var target in entry.Targets.OrderBy(target => target, StringComparer.Ordinal))
             {
-                AddAlias(aliases, symbol, entity.Id);
+                if (entityIds.TryGetValue(target, out var entity))
+                {
+                    AddAlias(aliases, entry.Alias, entity.Id);
+                }
             }
         }
 
-        WriteAliases(wikiRoot, new AliasIndex
-        {
-            Aliases = aliases
-                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-                .Select(pair => new AliasEntry
-                {
-                    Alias = pair.Key,
-                    Targets = pair.Value.ToList(),
-                })
-                .ToList(),
-        });
-        WriteRedirects(wikiRoot, new RedirectIndex());
-        WriteBacklinks(wikiRoot, new BacklinkIndex());
+        AddEntityAliases(aliases, entityList);
+        WriteAliases(wikiRoot, ToAliasIndex(aliases));
     }
 
     public void WriteAliases(string wikiRoot, AliasIndex aliases)
@@ -88,6 +90,42 @@ public sealed class NavigationStore
 
     private static T ReadOrDefault<T>(string path)
         where T : new() => File.Exists(path) ? AtomicFile.ReadJson<T>(path) : new T();
+
+    private static AliasIndex CreateGeneratedAliases(IEnumerable<Entity> entities)
+    {
+        var aliases = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
+        AddEntityAliases(aliases, entities.OrderBy(entity => entity.Id, StringComparer.Ordinal));
+        return ToAliasIndex(aliases);
+    }
+
+    private static void AddEntityAliases(IDictionary<string, SortedSet<string>> aliases, IEnumerable<Entity> entities)
+    {
+        foreach (var entity in entities)
+        {
+            AddAlias(aliases, entity.Title, entity.Id);
+            foreach (var alias in entity.Aliases.OrderBy(alias => alias, StringComparer.Ordinal))
+            {
+                AddAlias(aliases, alias, entity.Id);
+            }
+
+            foreach (var symbol in entity.Symbols.OrderBy(symbol => symbol, StringComparer.Ordinal))
+            {
+                AddAlias(aliases, symbol, entity.Id);
+            }
+        }
+    }
+
+    private static AliasIndex ToAliasIndex(IReadOnlyDictionary<string, SortedSet<string>> aliases) => new()
+    {
+        Aliases = aliases
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => new AliasEntry
+            {
+                Alias = pair.Key,
+                Targets = pair.Value.ToList(),
+            })
+            .ToList(),
+    };
 
     private static void AddAlias(IDictionary<string, SortedSet<string>> aliases, string? alias, string entityId)
     {

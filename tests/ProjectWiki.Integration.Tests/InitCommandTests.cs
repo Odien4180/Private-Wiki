@@ -70,6 +70,30 @@ public class InitCommandTests : IDisposable
         Assert.Contains("does not exist", stdErr, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void UpdateRebuildAndInspect_OperateOnAnInitializedWiki()
+    {
+        var init = CliRunner.Run("init", "--project", _fixtureRoot, "--wiki", _wikiRoot);
+        Assert.Equal(0, init.ExitCode);
+
+        var (updateCode, updateOutput, updateError) = CliRunner.Run("update", "--wiki", _wikiRoot);
+        Assert.True(updateCode == 0, $"update failed. stdout: {updateOutput}\nstderr: {updateError}");
+        using var update = JsonDocument.Parse(updateOutput);
+        Assert.False(update.RootElement.GetProperty("isRebuild").GetBoolean());
+        Assert.Equal(0, update.RootElement.GetProperty("changes").GetArrayLength());
+
+        var (inspectCode, inspectOutput, inspectError) = CliRunner.Run("inspect", "CombatManager", "--wiki", _wikiRoot);
+        Assert.True(inspectCode == 0, $"inspect failed. stdout: {inspectOutput}\nstderr: {inspectError}");
+        using var inspection = JsonDocument.Parse(inspectOutput);
+        Assert.True(inspection.RootElement.GetProperty("isFound").GetBoolean());
+        Assert.Equal("combat-manager", inspection.RootElement.GetProperty("entityId").GetString());
+
+        var (rebuildCode, rebuildOutput, rebuildError) = CliRunner.Run("rebuild", "--wiki", _wikiRoot);
+        Assert.True(rebuildCode == 0, $"rebuild failed. stdout: {rebuildOutput}\nstderr: {rebuildError}");
+        using var rebuild = JsonDocument.Parse(rebuildOutput);
+        Assert.True(rebuild.RootElement.GetProperty("isRebuild").GetBoolean());
+    }
+
     private static string FindFixtureRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

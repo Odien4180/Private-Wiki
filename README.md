@@ -12,7 +12,7 @@ orchestrates it. See:
 - [`.agents/skills/project-wiki/SKILL.md`](.agents/skills/project-wiki/SKILL.md) — skill workflow controller
 - [`.agents/skills/project-wiki/docs/architecture.md`](.agents/skills/project-wiki/docs/architecture.md) — overall architecture and milestone plan
 
-### Engine (Milestone 3 navigation core)
+### Engine (Milestone 4 incremental updates)
 
 The `project-wiki` engine/CLI (`src/ProjectWiki.Core`, `src/ProjectWiki.Cli`)
 implements the deterministic core: project scanning, file hashing, git
@@ -20,14 +20,17 @@ detection, Roslyn-based C# static analysis, and initial architecture document
 generation. It works standalone, without any AI agent attached. Documents use
 delimited `AUTO` blocks so generated sections can be refreshed without
 overwriting human-authored content. The engine also persists aliases and
-redirects, validates Markdown wiki links, and atomically rebuilds backlinks.
+redirects, validates Markdown wiki links, atomically rebuilds backlinks, and
+supports hash-based `update`, `rebuild`, and graph-context `inspect` workflows.
 
 ```bash
 dotnet build
 dotnet test
 dotnet run --project src/ProjectWiki.Cli -- init --project /path/to/project --wiki /path/to/wiki
+dotnet run --project src/ProjectWiki.Cli -- update --wiki /path/to/wiki
+dotnet run --project src/ProjectWiki.Cli -- inspect entity-id --wiki /path/to/wiki
 ```
 
-Later milestones (document generation, cross-linking, incremental update,
-Unity analysis, web UI) are tracked in
+Later milestones (document generation, cross-linking, Unity analysis, web UI)
+are tracked in
 [`.agents/skills/project-wiki/docs/architecture.md`](.agents/skills/project-wiki/docs/architecture.md).
