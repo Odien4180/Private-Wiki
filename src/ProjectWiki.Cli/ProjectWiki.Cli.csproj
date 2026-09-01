@@ -12,6 +12,10 @@
     <AssemblyName>project-wiki</AssemblyName>
     <RootNamespace>ProjectWiki.Cli</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>project-wiki</ToolCommandName>
+    <PackageId>ProjectWiki.Cli</PackageId>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
 </Project>
