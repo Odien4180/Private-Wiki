@@ -549,7 +549,7 @@ internal sealed class SiteGenerator
     {
         var headingIds = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         return markdown.ReplaceLineEndings("\n").Split('\n')
-            .Select(HeadingPattern.Match)
+            .Select(line => HeadingPattern.Match(line))
             .Where(match => match.Success && match.Groups[1].Length > 1)
             .Select(match => new TocEntry(
                 match.Groups[1].Length,
@@ -652,7 +652,7 @@ internal sealed class SiteGenerator
 
     private static string GetDocumentTitle(string content, string relativePath)
     {
-        var match = content.ReplaceLineEndings("\n").Split('\n').Select(HeadingPattern.Match)
+        var match = content.ReplaceLineEndings("\n").Split('\n').Select(line => HeadingPattern.Match(line))
             .FirstOrDefault(candidate => candidate.Success && candidate.Groups[1].Length == 1);
         return match is null ? Path.GetFileNameWithoutExtension(relativePath) : PlainText(match.Groups[2].Value);
     }
@@ -734,7 +734,9 @@ internal sealed class SiteGenerator
         }
 
         return !uri.IsAbsoluteUri
-            || uri.Scheme is Uri.UriSchemeHttp or Uri.UriSchemeHttps or "mailto";
+            || string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(uri.Scheme, "mailto", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string RelativeUrl(string fromOutputPath, string toOutputPath)

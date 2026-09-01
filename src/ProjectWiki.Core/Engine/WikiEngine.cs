@@ -346,7 +346,7 @@ public sealed class WikiEngine
         };
     }
 
-    private static WikiUpdateResult Reindex(WikiUpdateOptions options, bool isRebuild)
+    private WikiUpdateResult Reindex(WikiUpdateOptions options, bool isRebuild)
     {
         ArgumentNullException.ThrowIfNull(options);
         var wikiRoot = ValidateWikiRoot(new WikiNavigationOptions { WikiRoot = options.WikiRoot });

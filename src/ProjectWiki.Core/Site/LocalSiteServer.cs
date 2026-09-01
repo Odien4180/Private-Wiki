@@ -98,7 +98,7 @@ internal sealed class LocalSiteServer
         }
 
         var relativePath = decodedPath.TrimStart('/');
-        if (relativePath.Length == 0 || relativePath.EndsWith('/', StringComparison.Ordinal))
+        if (relativePath.Length == 0 || relativePath.EndsWith("/", StringComparison.Ordinal))
         {
             relativePath += "index.html";
         }
