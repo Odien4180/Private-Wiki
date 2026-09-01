@@ -37,3 +37,35 @@ dotnet run --project src/ProjectWiki.Cli -- serve --wiki /path/to/wiki --port 80
 
 `build` creates a static site in `<wiki>/site`; `serve` binds it only to
 `127.0.0.1`.
+
+## One-touch agent and CLI installation (Windows)
+
+`tools/Install-ProjectWiki.ps1` copies the complete skill directory and
+packages/registers the `project-wiki` CLI as a global .NET tool. It backs up a
+previously installed `project-wiki` skill instead of deleting it.
+
+For a double-clickable Windows launcher, use `tools/Install-ProjectWiki.cmd`.
+It forwards any target-selection arguments to the PowerShell installer.
+
+```powershell
+# Codex (default)
+.\tools\Install-ProjectWiki.ps1
+
+# Or run the launcher without changing the local execution-policy setting
+.\tools\Install-ProjectWiki.cmd -Target Codex
+
+# One selected agent runtime
+.\tools\Install-ProjectWiki.ps1 -Target Claude
+.\tools\Install-ProjectWiki.ps1 -Target Copilot
+
+# All supported personal skill locations
+.\tools\Install-ProjectWiki.ps1 -Target All
+
+# Any compatible skill root
+.\tools\Install-ProjectWiki.ps1 -Target Custom -Destination D:\AgentSkills
+```
+
+The default target roots are `%USERPROFILE%\.codex\skills`,
+`%USERPROFILE%\.claude\skills`, and `%USERPROFILE%\.copilot\skills`.
+Use `-SkipCli` when only the skill files should be installed. Start a new agent
+session after installation; then verify the command with `project-wiki --help`.

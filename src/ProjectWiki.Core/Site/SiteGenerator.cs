@@ -571,9 +571,12 @@ internal sealed class SiteGenerator
             .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
             .Append("<title>").Append(Encode(pageTitle)).Append(" · ").Append(Encode(config.Wiki.Title)).Append("</title>")
             .Append("<link rel=\"stylesheet\" href=\"").Append(Encode(RelativeUrl(outputPath, "assets/site.css"))).Append("\">")
-            .Append("</head><body><header><a href=\"").Append(Encode(RelativeUrl(outputPath, "index.html"))).Append("\">")
-            .Append(Encode(config.Wiki.Title)).Append("</a></header><div class=\"layout\">");
-        html.Append("<aside><h2>Sidebar</h2><nav><ul>");
+            .Append("</head><body><a class=\"skip-link\" href=\"#content\">Skip to content</a>")
+            .Append("<header class=\"site-header\"><div class=\"site-header-inner\"><a class=\"site-brand\" href=\"")
+            .Append(Encode(RelativeUrl(outputPath, "index.html"))).Append("\">")
+            .Append(Encode(config.Wiki.Title)).Append("</a><button class=\"nav-toggle\" type=\"button\" aria-controls=\"wiki-navigation\" aria-expanded=\"false\">")
+            .Append("Menu</button></div></header><div class=\"layout\">");
+        html.Append("<aside class=\"sidebar\" id=\"wiki-navigation\"><div class=\"sidebar-heading\"><span class=\"eyebrow\">Project wiki</span><h2>Documents</h2></div><nav aria-label=\"Wiki documents\"><ul>");
         foreach (var document in documents)
         {
             html.Append("<li><a href=\"").Append(Encode(RelativeUrl(outputPath, document.OutputPath))).Append("\">")
@@ -581,13 +584,13 @@ internal sealed class SiteGenerator
         }
 
         html.Append("<li><a href=\"").Append(Encode(RelativeUrl(outputPath, "health.html"))).Append("\">Site health</a></li>")
-            .Append("</ul></nav></aside><main><label class=\"search\"><span>Search</span><input id=\"search\" type=\"search\" autocomplete=\"off\"></label>")
-            .Append("<ul id=\"search-results\"></ul>")
+            .Append("</ul></nav></aside><main id=\"content\" tabindex=\"-1\"><div class=\"page-tools\"><label class=\"search\" for=\"search\"><span>Search this wiki</span><input id=\"search\" type=\"search\" autocomplete=\"off\" placeholder=\"Find a page or symbol\" aria-controls=\"search-results\"></label>")
+            .Append("<ul id=\"search-results\" aria-live=\"polite\"></ul></div><article class=\"wiki-article\">")
             .Append(body)
-            .Append("</main>");
+            .Append("</article></main>");
         if (tableOfContents.Count > 0)
         {
-            html.Append("<aside class=\"toc\"><h2>On this page</h2><ol>");
+            html.Append("<aside class=\"toc\" aria-label=\"Table of contents\"><span class=\"eyebrow\">Contents</span><h2>On this page</h2><ol>");
             foreach (var entry in tableOfContents)
             {
                 html.Append("<li class=\"toc-level-").Append(entry.Level).Append("\"><a href=\"#")
@@ -597,7 +600,7 @@ internal sealed class SiteGenerator
             html.Append("</ol></aside>");
         }
 
-        return html.Append("</div><script data-site-root=\"")
+        return html.Append("</div><footer class=\"site-footer\">Generated local project wiki</footer><script data-site-root=\"")
             .Append(Encode(RelativeUrl(outputPath, "index.html")))
             .Append("\" src=\"")
             .Append(Encode(RelativeUrl(outputPath, "assets/site.js")))
@@ -825,19 +828,39 @@ internal sealed class SiteGenerator
     }
 
     private const string SiteCss = """
-        :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-        body { margin: 0; line-height: 1.5; }
-        header { padding: 1rem 2rem; border-bottom: 1px solid #8885; font-weight: 700; }
-        header a { color: inherit; text-decoration: none; }
-        .layout { display: grid; grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr) minmax(12rem, 16rem); gap: 2rem; max-width: 90rem; margin: auto; padding: 2rem; }
-        main { min-width: 0; } aside ul, .toc ol { padding-left: 1.2rem; } .toc { font-size: .9rem; } .toc-level-3 { margin-left: .75rem; } .toc-level-4, .toc-level-5, .toc-level-6 { margin-left: 1.5rem; }
-        pre { overflow: auto; padding: 1rem; background: #8882; } code { font-family: ui-monospace, monospace; } .search { display: block; margin-bottom: 1rem; } .search input { margin-left: .5rem; }
-        #search-results:empty { display: none; } #search-results { padding-left: 1.2rem; } .unresolved { text-decoration: underline dotted; } .location { color: #777; font-size: .9em; } .healthy { color: #18794e; } .unhealthy { color: #b42318; }
-        @media (max-width: 50rem) { .layout { display: block; } aside, .toc { margin: 1.5rem 0; } }
+        :root { color-scheme: light; font-family: Inter, Pretendard, "Noto Sans KR", system-ui, sans-serif; --paper: #f7f8fa; --surface: #fff; --ink: #202124; --muted: #626a73; --line: #dfe3e8; --accent: #008275; --accent-soft: #e4f4f1; --code: #f0f3f5; --danger: #b42318; --success: #16764a; }
+        * { box-sizing: border-box; } html { scroll-behavior: smooth; } body { margin: 0; min-width: 20rem; color: var(--ink); background: var(--paper); line-height: 1.65; }
+        a { color: #087367; text-decoration-color: #8bc9c0; text-underline-offset: .15em; } a:hover { color: #005e55; text-decoration-thickness: 2px; } :focus-visible { outline: 3px solid #efad24; outline-offset: 3px; }
+        .skip-link { position: fixed; z-index: 20; top: .75rem; left: .75rem; padding: .55rem .8rem; color: #fff; background: #18201f; border-radius: .35rem; transform: translateY(-200%); } .skip-link:focus { transform: translateY(0); }
+        .site-header { position: sticky; z-index: 10; top: 0; border-bottom: 1px solid #244640; background: #193e38; box-shadow: 0 2px 10px #0a211c22; } .site-header-inner { display: flex; align-items: center; justify-content: space-between; width: min(96rem, 100%); min-height: 3.5rem; margin: auto; padding: 0 1.25rem; }
+        .site-brand { color: #fff; font-weight: 800; letter-spacing: -.02em; text-decoration: none; } .site-brand::before { content: "◆"; margin-right: .5rem; color: #79d8c9; font-size: .75em; } .nav-toggle { display: none; border: 1px solid #92bbb4; border-radius: .35rem; padding: .35rem .65rem; color: #fff; background: transparent; font: inherit; }
+        .layout { display: grid; grid-template-columns: minmax(12rem, 15rem) minmax(0, 52rem) minmax(11rem, 14rem); gap: clamp(1rem, 3vw, 2.75rem); width: min(96rem, 100%); margin: auto; padding: clamp(1rem, 3vw, 2.5rem) 1.25rem 3.5rem; }
+        .sidebar, .toc { align-self: start; position: sticky; top: 5rem; max-height: calc(100vh - 6rem); overflow: auto; font-size: .92rem; } .sidebar { border-right: 1px solid var(--line); padding-right: 1rem; } .sidebar-heading { margin-bottom: .75rem; } .eyebrow { display: block; color: var(--muted); font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+        .sidebar h2, .toc h2 { margin: .1rem 0 .6rem; font-size: 1rem; } .sidebar ul, .toc ol { margin: 0; padding: 0; list-style: none; } .sidebar li + li { margin-top: .12rem; } .sidebar a { display: block; border-radius: .3rem; padding: .25rem .45rem; color: #35403f; text-decoration: none; } .sidebar a:hover { color: #075f55; background: var(--accent-soft); }
+        main { min-width: 0; } .page-tools { display: flex; justify-content: flex-end; margin-bottom: 1rem; } .search { display: grid; grid-template-columns: auto minmax(12rem, 17rem); align-items: center; gap: .55rem; color: var(--muted); font-size: .78rem; } .search input { width: 100%; border: 1px solid #c9d0d6; border-radius: .35rem; padding: .52rem .65rem; color: var(--ink); background: var(--surface); font: inherit; }
+        #search-results { position: absolute; z-index: 5; width: min(25rem, calc(100vw - 2.5rem)); margin: 2.15rem 0 0; padding: .45rem; list-style: none; border: 1px solid var(--line); border-radius: .45rem; background: var(--surface); box-shadow: 0 .7rem 1.5rem #1b24221c; } #search-results:empty { display: none; } #search-results a { display: block; padding: .38rem .5rem; border-radius: .25rem; text-decoration: none; }
+        .wiki-article { padding: clamp(1.25rem, 3.5vw, 3rem); border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); box-shadow: 0 .3rem .9rem #1b242208; } .wiki-article > :first-child { margin-top: 0; } .wiki-article h1 { margin-bottom: 1.5rem; padding-bottom: .7rem; border-bottom: 2px solid var(--accent); font-size: clamp(1.65rem, 4vw, 2.45rem); line-height: 1.25; letter-spacing: -.035em; } .wiki-article h2 { margin-top: 2.5rem; padding-bottom: .38rem; border-bottom: 1px solid var(--line); font-size: 1.4rem; } .wiki-article h3 { margin-top: 2rem; font-size: 1.15rem; } .wiki-article :is(ul, ol) { padding-left: 1.5rem; } .wiki-article li + li { margin-top: .25rem; }
+        pre { overflow: auto; padding: 1rem 1.15rem; border: 1px solid #d9e0e3; border-radius: .35rem; background: var(--code); } code { font-family: "Cascadia Code", ui-monospace, monospace; font-size: .9em; } :not(pre) > code { padding: .1em .28em; border-radius: .2rem; background: var(--code); } .wiki-link { font-weight: 600; } .unresolved { color: #925c00; text-decoration: underline dotted; } .location { color: var(--muted); font-size: .9em; } .backlinks, .source-captions { margin-top: 2rem; padding: 1rem 1.15rem; border-left: 3px solid #82cfc4; background: #f3faf8; } .backlinks h2, .source-captions h2 { margin-top: 0; border: 0; font-size: 1.05rem; } .healthy { color: var(--success); font-weight: 700; } .unhealthy { color: var(--danger); font-weight: 700; }
+        .toc { border-left: 1px solid var(--line); padding-left: 1rem; } .toc li { margin: .22rem 0; } .toc a { color: var(--muted); text-decoration: none; } .toc a:hover { color: var(--accent); text-decoration: underline; } .toc-level-3 { margin-left: .7rem; } .toc-level-4, .toc-level-5, .toc-level-6 { margin-left: 1.4rem; } .site-footer { padding: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); background: #fff; font-size: .82rem; text-align: center; }
+        @media (prefers-color-scheme: dark) { :root { color-scheme: dark; --paper: #151a1a; --surface: #1e2524; --ink: #e7edeb; --muted: #a8b4b1; --line: #394543; --accent: #75d3c4; --accent-soft: #183c37; --code: #16201f; } a { color: #82d7ca; text-decoration-color: #4d8078; } a:hover { color: #b0eee5; } .site-header { border-color: #52746e; } .sidebar a { color: #d2dedb; } .search input { border-color: #4b5c59; } .backlinks, .source-captions { background: #18312d; } }
+        @media (max-width: 70rem) { .layout { grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr); } .toc { display: none; } }
+        @media (max-width: 48rem) { .nav-toggle { display: inline-block; } .layout { display: block; padding: 1rem; } .sidebar { position: fixed; z-index: 15; inset: 3.5rem auto 0 0; width: min(20rem, 86vw); max-height: none; padding: 1.25rem; border-right: 1px solid var(--line); background: var(--surface); box-shadow: .5rem 0 1.5rem #0003; transform: translateX(-105%); transition: transform .2s ease; } body.nav-open { overflow: hidden; } body.nav-open .sidebar { transform: translateX(0); } .page-tools { justify-content: stretch; } .search { grid-template-columns: 1fr; width: 100%; } .wiki-article { padding: 1.25rem; } }
+        @media (max-width: 30rem) { .site-header-inner { padding: 0 .85rem; } .layout { padding: .75rem; } .wiki-article { border-radius: .3rem; } }
         """;
 
     private const string SiteScript = """
         (() => {
+          const toggle = document.querySelector(".nav-toggle");
+          const closeNavigation = () => {
+            document.body.classList.remove("nav-open");
+            toggle?.setAttribute("aria-expanded", "false");
+          };
+          toggle?.addEventListener("click", () => {
+            const open = document.body.classList.toggle("nav-open");
+            toggle.setAttribute("aria-expanded", String(open));
+          });
+          document.addEventListener("keydown", event => { if (event.key === "Escape") closeNavigation(); });
+          document.querySelectorAll(".sidebar a").forEach(link => link.addEventListener("click", closeNavigation));
           const input = document.getElementById("search");
           const results = document.getElementById("search-results");
           if (!input || !results) return;

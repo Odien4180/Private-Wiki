@@ -59,7 +59,9 @@ public sealed class SiteGeneratorTests : IDisposable
         Assert.Equal(1, result.EntityPageCount);
         Assert.Equal(2, result.SearchEntryCount);
         var document = File.ReadAllText(Path.Combine(_wikiRoot, "site", "architecture", "overview.html"));
-        Assert.Contains("<aside><h2>Sidebar</h2>", document);
+        Assert.Contains("<aside class=\"sidebar\" id=\"wiki-navigation\">", document);
+        Assert.Contains("<article class=\"wiki-article\">", document);
+        Assert.Contains("<button class=\"nav-toggle\"", document);
         Assert.Contains("id=\"details\"", document);
         Assert.Contains("href=\"../entities/alpha.html\"", document);
         Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", document);
@@ -68,6 +70,11 @@ public sealed class SiteGeneratorTests : IDisposable
         Assert.Contains("Overview", entity);
         Assert.Contains("Defined in &lt;source&gt;.", entity);
         Assert.Contains("Source/Alpha.cs:4–6", entity);
+        var css = File.ReadAllText(Path.Combine(_wikiRoot, "site", "assets", "site.css"));
+        Assert.Contains("grid-template-columns: minmax(12rem, 15rem)", css);
+        Assert.Contains("@media (prefers-color-scheme: dark)", css);
+        var script = File.ReadAllText(Path.Combine(_wikiRoot, "site", "assets", "site.js"));
+        Assert.Contains("nav-open", script);
         Assert.True(File.Exists(Path.Combine(_wikiRoot, "site", "health.html")));
         Assert.True(File.Exists(Path.Combine(_wikiRoot, "reports", "site-health.json")));
         var searchIndex = File.ReadAllText(Path.Combine(_wikiRoot, "site", "search-index.json"));
