@@ -33,4 +33,6 @@ public sealed class WikiConfig
     public AnalysisConfig Analysis { get; init; } = new();
 
     public List<string> Exclude { get; init; } = new();
+
+    public List<string> Include { get; init; } = new();
 }

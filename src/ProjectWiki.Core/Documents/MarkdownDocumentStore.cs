@@ -32,6 +32,10 @@ public sealed class MarkdownDocumentStore
         foreach (var section in sections)
         {
             content.Append($"{Environment.NewLine}<!-- AUTO:{section}:START -->{Environment.NewLine}<!-- AUTO:{section}:END -->{Environment.NewLine}");
+            if (section == "SUMMARY")
+            {
+                content.Append($"{Environment.NewLine}<!-- AGENT:EXPLANATION:START -->{Environment.NewLine}<!-- AGENT:EXPLANATION:END -->{Environment.NewLine}");
+            }
         }
 
         content.Append($"{Environment.NewLine}## Developer Notes{Environment.NewLine}{Environment.NewLine}");
