@@ -229,7 +229,9 @@ public sealed class NavigationService
             }
 
             foreach (var link in WikiLinkParser.Parse(doc.Path, doc.Content)
-                         .Where(link => !link.IsMalformed && resolver.Resolve(link.Target).Status == NavigationResolutionStatus.Broken))
+                         .Where(link => HasAgentBlock(doc.Content)
+                             && !link.IsMalformed
+                             && resolver.Resolve(link.Target).Status == NavigationResolutionStatus.Broken))
             {
                 issues.Add(new NavigationValidationIssue
                 {
@@ -246,6 +248,7 @@ public sealed class NavigationService
         var firstPartyEntities = data.Entities.Entities
             .Where(entity => CodeOwnershipClassifier.Classify(entity) == "first_party" && entity.Sources.Count > 0)
             .ToList();
+        var documentedEntityIds = BuildDocumentedEntityIds(data.Entities.Entities, docs);
         var relationCounts = data.Entities.Entities
             .ToDictionary(entity => entity.Id, _ => 0, StringComparer.OrdinalIgnoreCase);
         var relationsPath = Path.Combine(wikiRoot, "knowledge", "relations.json");
@@ -270,7 +273,7 @@ public sealed class NavigationService
             .ToList();
         if (importantFirstPartyEntities.Count > 0 && minCoverage > 0)
         {
-            var documented = importantFirstPartyEntities.Count(entity => IsEntityDocumented(entity, docs));
+            var documented = importantFirstPartyEntities.Count(entity => documentedEntityIds.Contains(entity.Id));
             var coverage = documented / (double)importantFirstPartyEntities.Count;
             if (coverage < minCoverage)
             {
@@ -278,15 +281,15 @@ public sealed class NavigationService
             }
         }
 
-        foreach (var entity in importantFirstPartyEntities.Where(entity => !IsEntityDocumented(entity, docs)))
+        foreach (var entity in importantFirstPartyEntities.Where(entity => !documentedEntityIds.Contains(entity.Id)))
         {
             AddIssue(issues, "undocumented_important_entity", $"Important entity '{entity.Id}' has graph references but no document coverage.");
         }
 
         var thirdPartyMentions = data.Entities.Entities
             .Where(entity => CodeOwnershipClassifier.Classify(entity) == "third_party")
-            .Count(entity => IsEntityDocumented(entity, docs));
-        var firstPartyMentions = firstPartyEntities.Count(entity => IsEntityDocumented(entity, docs));
+            .Count(entity => documentedEntityIds.Contains(entity.Id));
+        var firstPartyMentions = firstPartyEntities.Count(entity => documentedEntityIds.Contains(entity.Id));
         if (thirdPartyMentions > 0 && firstPartyMentions > 0 && thirdPartyMentions > firstPartyMentions)
         {
             AddIssue(issues, "third_party_noise_too_high", "Third-party documented entity mentions exceed first-party mentions.");
@@ -566,11 +569,19 @@ public sealed class NavigationService
         || path.StartsWith("data/", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("packages/", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsEntityDocumented(ProjectWiki.Core.Model.Entity entity, IEnumerable<DocumentContent> documents) =>
-        documents.Any(doc =>
-            doc.Content.Contains($"[[{entity.Id}", StringComparison.OrdinalIgnoreCase)
-            || doc.Content.Contains(entity.Title, StringComparison.OrdinalIgnoreCase)
-            || entity.Sources.Any(source => doc.Content.Contains(source, StringComparison.OrdinalIgnoreCase)));
+    private static HashSet<string> BuildDocumentedEntityIds(
+        IEnumerable<ProjectWiki.Core.Model.Entity> entities,
+        IEnumerable<DocumentContent> documents)
+    {
+        var docs = documents.ToList();
+        return entities
+            .Where(entity => docs.Any(doc =>
+                doc.Content.Contains($"[[{entity.Id}", StringComparison.OrdinalIgnoreCase)
+                || doc.Content.Contains(entity.Title, StringComparison.OrdinalIgnoreCase)
+                || entity.Sources.Any(source => doc.Content.Contains(source, StringComparison.OrdinalIgnoreCase))))
+            .Select(entity => entity.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
 
     private static bool IsImportantEntity(ProjectWiki.Core.Model.Entity entity, int relationCount) =>
         relationCount >= 2
