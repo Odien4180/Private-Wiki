@@ -11,5 +11,5 @@ of persisted navigation data and Markdown documents. It reports:
 
 `WikiEngine.BuildNavigation` rebuilds `knowledge/backlinks.json` from the
 current Markdown documents using atomic replacement. It preserves existing
-aliases and redirects. CLI commands for these engine methods are deferred to
-a later milestone.
+aliases and redirects. `project-wiki validate --wiki <path>` exposes the
+validation result as JSON and returns nonzero when validation fails.

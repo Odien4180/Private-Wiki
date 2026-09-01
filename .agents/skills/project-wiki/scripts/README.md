@@ -27,7 +27,7 @@ dotnet test
 | `project-wiki update --wiki <path>` | Implemented (Milestones 4 and 5) |
 | `project-wiki rebuild --wiki <path>` | Implemented (Milestones 4 and 5) |
 | `project-wiki inspect <entity> --wiki <path>` | Implemented (Milestone 4) |
-| `project-wiki validate --wiki <path>` | CLI wiring planned; the Milestone 3 engine API is implemented |
+| `project-wiki validate --wiki <path>` | Implemented (Milestone 3) |
 | `project-wiki build --wiki <path>` | Implemented (Milestone 6) |
 | `project-wiki serve --wiki <path> [--port <1-65535>]` | Implemented (Milestone 6) |
 

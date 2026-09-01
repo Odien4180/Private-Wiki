@@ -78,7 +78,7 @@ static int RunInit(Dictionary<string, string> options)
 
 static int RunUpdate(Dictionary<string, string> options, bool isRebuild)
 {
-    var command = isRebuild ? "rebuild" : "update";
+    var operationName = isRebuild ? "rebuild" : "update";
     if (!options.TryGetValue("wiki", out var wikiRoot) || string.IsNullOrWhiteSpace(wikiRoot))
     {
         Console.Error.WriteLine("Missing required option: --wiki <path>");
@@ -96,7 +96,7 @@ static int RunUpdate(Dictionary<string, string> options, bool isRebuild)
     }
     catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
     {
-        Console.Error.WriteLine($"{command} failed: {ex.Message}");
+        Console.Error.WriteLine($"{operationName} failed: {ex.Message}");
         return 1;
     }
 }
